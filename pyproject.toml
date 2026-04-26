@@ -1,0 +1,82 @@
+[project]
+name = "pingscraper"
+version = "0.1.0"
+description = "Continuous Wi-Fi monitor and reporting CLI (pings, JSONL logs, HTML/CSV reports)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Dan Flanagan", email = "dan.flanagan93@gmail.com" }]
+keywords = ["wifi", "monitor", "ping", "network", "diagnostics"]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Networking :: Monitoring",
+]
+dependencies = [
+    "jinja2>=3.1",
+]
+
+[project.scripts]
+pingscraper = "pingscraper.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/dan-flanagan/PingScraper"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pingscraper"]
+
+[dependency-groups]
+dev = [
+    "black>=24.10",
+    "isort>=5.13",
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+# ---------------------------------------------------------------------------
+# Tooling
+# ---------------------------------------------------------------------------
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["pingscraper"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501", # line length handled by black
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "SIM"]  # tests may use assertion patterns ruff dislikes
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"

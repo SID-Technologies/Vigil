@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python --version)",
+      "PowerShell(python -c \"import sys; print\\(sys.executable\\); print\\(sys.version\\)\")",
+      "PowerShell(powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\")",
+      "PowerShell(Get-Command *)",
+      "Bash(export PATH=\"$HOME/.local/bin:$PATH\")",
+      "Bash(uv sync *)",
+      "Bash(./.venv/Scripts/pingscraper.exe --version)",
+      "Bash(./.venv/Scripts/pingscraper.exe --help)",
+      "Bash(./.venv/Scripts/pingscraper.exe monitor *)",
+      "Bash(./.venv/Scripts/isort.exe --check-only src)",
+      "Bash(./.venv/Scripts/black.exe --check src)",
+      "Bash(./.venv/Scripts/ruff.exe check *)",
+      "Bash(./.venv/Scripts/black.exe src *)",
+      "Bash(command -v make)",
+      "Bash(make --version)",
+      "Bash(make help *)",
+      "Bash(make version *)",
+      "Bash(make lint *)",
+      "PowerShell(make *)",
+      "PowerShell(Get-WinEvent *)",
+      "Bash(awk -F'\"target_label\":\"' '{print $2}' logs/pings-2026-04-17.jsonl logs/pings-2026-04-18.jsonl)",
+      "Bash(awk -F'\"' '{print $1}')",
+      "Bash(python *)",
+      "Bash(.venv/Scripts/python.exe *)",
+      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -m pingscraper analyze --log-dir test-logs)",
+      "Bash(.venv/Scripts/pytest.exe tests *)",
+      "Bash(.venv/Scripts/ruff.exe check *)"
+    ]
+  }
+}

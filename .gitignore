@@ -1,0 +1,32 @@
+# Runtime output (may contain personal network data — never commit)
+logs/
+reports/
+test-logs/
+test-reports/
+
+# Secrets
+.env
+.env.*
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtualenv / uv
+.venv/
+.uv/
+
+# Tooling caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
