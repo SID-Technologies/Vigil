@@ -1,145 +1,97 @@
-# pingscraper — developer commands
-#
-# Works from PowerShell, cmd.exe, or Git Bash. No bash/awk/find required.
-#
-# Only `sync`, `lock`, and `upgrade` need `uv` on PATH. Every other target
-# uses the .venv binaries directly, so once `make sync` has run once, the
-# rest of the Makefile keeps working even if uv falls off PATH.
-#
-# Pass flags through to the CLI with ARGS, e.g.:
-#   make monitor ARGS="--interval 1.0 --log-dir D:/logs"
-#   make report  ARGS="--out-dir D:/reports"
-
-.DEFAULT_GOAL := help
-
-UV        ?= uv
-VENV_BIN  := .venv/Scripts
-CLI       := $(VENV_BIN)/pingscraper.exe
-PY        := $(VENV_BIN)/python.exe
-BLACK     := $(VENV_BIN)/black.exe
-ISORT     := $(VENV_BIN)/isort.exe
-RUFF      := $(VENV_BIN)/ruff.exe
-PYTEST    := $(VENV_BIN)/pytest.exe
-SRC       := src
-TESTS     := tests
-
-# Fallback for targets that don't need .venv (help/clean) — system Python.
-SYSPY     ?= python
-
-# ---------------------------------------------------------------------------
-# Help (default target)
-# ---------------------------------------------------------------------------
-
-define HELP_TEXT
-usage: make [-h] <target> [ARGS="..."]
-
-Developer commands for pingscraper.
-
-targets:
-  environment
-    sync        Install project + dev deps into .venv (needs uv on PATH)
-    lock        Refresh uv.lock (needs uv on PATH)
-    upgrade     Upgrade locked deps to latest allowed versions
-
-  run
-    monitor     Start the Wi-Fi monitor (Ctrl+C to stop)
-    analyze     Print text analysis of collected logs
-    report      Generate CSV/JSON/HTML reports
-    version     Print CLI version
-
-  lint & test
-    lint        Check with black, isort, ruff
-    format      Apply isort + black
-    fix         ruff --fix + format
-    check       Alias for lint
-    test        Run pytest
-
-  clean
-    clean       Remove build artifacts and caches
-    distclean   clean + remove .venv, logs/, reports/, uv.lock
-
-options:
-  -h, --help    Show this help message
-endef
-export HELP_TEXT
-
+##@ Core
 .PHONY: help
-help:
-	@$(SYSPY) -c "import os; print(os.environ['HELP_TEXT'])"
+help:  ## Display this help message.
+	@echo "Usage:"
+	@echo "  make [target]"
+	@awk 'BEGIN {FS = ":.*?## "} \
+		/^[a-zA-Z0-9_-]+:.*?## / { \
+			printf "\033[36m  %-45s\033[0m %s\n", $$1, $$2 \
+		} \
+		/^##@/ { \
+			printf "\n\033[1m%s\033[0m\n", substr($$0, 5) \
+		}' $(MAKEFILE_LIST)
 
-# ---------------------------------------------------------------------------
-# Environment — these need `uv` on PATH
-# ---------------------------------------------------------------------------
+##@ Go sidecar
 
-.PHONY: sync
-sync:
-	$(UV) sync
+.PHONY: gen-ent
+gen-ent: ## Run Ent codegen — must run after schema changes in db/ent/schema/.
+	@cd db/ent && go generate ./
 
-.PHONY: lock
-lock:
-	$(UV) lock
+.PHONY: tidy
+tidy: ## go mod tidy — fetch new module deps and prune unused.
+	@go mod tidy
 
-.PHONY: upgrade
-upgrade:
-	$(UV) lock --upgrade
-	$(UV) sync
+.PHONY: build-sidecar
+build-sidecar: ## Build the Go sidecar for the host platform and drop into Tauri's binaries dir.
+	@bash scripts/build-sidecar.sh
 
-# ---------------------------------------------------------------------------
-# Run the CLI (via .venv — no uv needed)
-# ---------------------------------------------------------------------------
+.PHONY: build-sidecar-darwin-arm64
+build-sidecar-darwin-arm64: ## Cross-compile sidecar for macOS arm64.
+	@GOOS=darwin GOARCH=arm64 bash scripts/build-sidecar.sh
 
-.PHONY: monitor
-monitor:
-	$(CLI) monitor $(ARGS)
+.PHONY: build-sidecar-darwin-amd64
+build-sidecar-darwin-amd64: ## Cross-compile sidecar for macOS amd64.
+	@GOOS=darwin GOARCH=amd64 bash scripts/build-sidecar.sh
 
-.PHONY: analyze
-analyze:
-	$(CLI) analyze $(ARGS)
+.PHONY: build-sidecar-darwin-universal
+build-sidecar-darwin-universal: build-sidecar-darwin-arm64 build-sidecar-darwin-amd64 ## Build both Mac archs and lipo into a universal binary.
+	@bash scripts/lipo-darwin.sh
 
-.PHONY: report
-report:
-	$(CLI) report $(ARGS)
+.PHONY: build-sidecar-windows
+build-sidecar-windows: ## Cross-compile sidecar for Windows amd64.
+	@GOOS=windows GOARCH=amd64 bash scripts/build-sidecar.sh
 
-.PHONY: version
-version:
-	$(CLI) --version
-
-# ---------------------------------------------------------------------------
-# Lint & format (via .venv — no uv needed)
-# ---------------------------------------------------------------------------
-
-.PHONY: lint
-lint:
-	$(BLACK) --check $(SRC)
-	$(ISORT) --check-only $(SRC)
-	$(RUFF) check $(SRC)
-
-.PHONY: format
-format:
-	$(ISORT) $(SRC)
-	$(BLACK) $(SRC)
-
-.PHONY: fix
-fix:
-	$(RUFF) check --fix $(SRC)
-	$(ISORT) $(SRC)
-	$(BLACK) $(SRC)
-
-.PHONY: check
-check: lint
+.PHONY: build-sidecar-linux
+build-sidecar-linux: ## Cross-compile sidecar for Linux amd64.
+	@GOOS=linux GOARCH=amd64 bash scripts/build-sidecar.sh
 
 .PHONY: test
-test:
-	$(PYTEST) $(TESTS)
+test: ## Run Go tests.
+	@go test ./...
 
-# ---------------------------------------------------------------------------
-# Clean (system Python — no .venv/uv dependency)
-# ---------------------------------------------------------------------------
+.PHONY: vet
+vet: ## Run go vet.
+	@go vet ./...
 
-.PHONY: clean
-clean:
-	@$(SYSPY) -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in ['build','dist','.ruff_cache','.pytest_cache','.mypy_cache']]; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('$(SRC)').rglob('__pycache__')]; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').glob('*.egg-info')]"
+##@ Frontend / Desktop (Tauri)
 
-.PHONY: distclean
-distclean: clean
-	@$(SYSPY) -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in ['.venv','logs','reports']]; pathlib.Path('uv.lock').unlink(missing_ok=True)"
+.PHONY: install
+install: ## Install pnpm workspace dependencies.
+	@pnpm install
+
+.PHONY: desktop-dev
+desktop-dev: build-sidecar ## Build the sidecar then run the Tauri desktop app in development mode.
+	@cd apps/desktop && pnpm tauri dev
+
+.PHONY: desktop-build
+desktop-build: build-sidecar ## Build the Tauri desktop app for the current platform.
+	@cd apps/desktop && pnpm tauri build
+
+.PHONY: desktop-build-debug
+desktop-build-debug: build-sidecar ## Build the Tauri desktop app in debug mode.
+	@cd apps/desktop && pnpm tauri build --debug
+
+.PHONY: desktop-icons
+desktop-icons: ## Generate Tauri app icons from a source image (apps/desktop/app-icon.png).
+	@cd apps/desktop && pnpm tauri icon app-icon.png
+
+##@ Quality
+
+.PHONY: lint
+lint: ## Run all linters via pre-commit.
+	@pre-commit run -v --all-files
+
+.PHONY: install-tools
+install-tools: ## Install pre-commit hooks for this repo.
+	@which pre-commit > /dev/null || echo "pre-commit not installed, see https://pre-commit.com/#install"
+	@pre-commit install --install-hooks
+
+##@ Legacy Python (will be removed once Go port reaches feature parity)
+
+.PHONY: python-monitor
+python-monitor: ## Run the legacy Python monitor (reference impl).
+	@uv run pingscraper monitor
+
+.PHONY: python-report
+python-report: ## Generate a report from the legacy Python tool.
+	@uv run pingscraper report

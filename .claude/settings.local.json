@@ -27,7 +27,10 @@
       "Bash(.venv/Scripts/python.exe *)",
       "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -m pingscraper analyze --log-dir test-logs)",
       "Bash(.venv/Scripts/pytest.exe tests *)",
-      "Bash(.venv/Scripts/ruff.exe check *)"
+      "Bash(.venv/Scripts/ruff.exe check *)",
+      "Bash(chmod +x /Users/danflanagan/Documents/GitHub/PingScrapper/scripts/build-sidecar.sh)",
+      "Bash(python3 *)",
+      "Bash(chmod +x *)"
     ]
   }
 }

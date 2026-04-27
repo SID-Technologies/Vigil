@@ -1,0 +1,43 @@
+{
+  "name": "vigil",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "dev:desktop": "cd apps/desktop && pnpm tauri dev",
+    "build:desktop": "cd apps/desktop && pnpm tauri build"
+  },
+  "devDependencies": {
+    "@tamagui/animations-css": "2.0.0-rc.36",
+    "@tamagui/cli": "2.0.0-rc.36",
+    "@tamagui/create-theme": "2.0.0-rc.36",
+    "@tamagui/theme-builder": "2.0.0-rc.36",
+    "@tamagui/vite-plugin": "2.0.0-rc.36",
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/react-native": "^0.73.0",
+    "typescript": "^6.0.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "ajv": ">=6.14.0",
+      "axios": ">=1.15.0",
+      "lodash": ">=4.18.0",
+      "lodash-es": ">=4.18.0"
+    }
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@tamagui/animations-react-native": "2.0.0-rc.36",
+    "@tamagui/colors": "2.0.0-rc.36",
+    "@tamagui/config": "2.0.0-rc.36",
+    "@tamagui/config-base": "2.0.0-rc.36",
+    "@tamagui/core": "2.0.0-rc.36",
+    "@tamagui/web": "2.0.0-rc.36",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-native": "^0.84.1",
+    "tamagui": "2.0.0-rc.36"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "target": "es2020",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": false,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@repo/configs": ["./packages/configs/src/index.ts"],
+      "@repo/configs/*": ["./packages/configs/src/*"]
+    }
+  },
+  "references": [
+    { "path": "./apps/desktop" },
+    { "path": "./packages/configs" }
+  ],
+  "exclude": ["node_modules", "dist", "build", "**/*.d.ts"]
+}

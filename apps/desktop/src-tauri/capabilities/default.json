@@ -1,0 +1,40 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main Vigil window. Permits sidecar spawn, IPC bridging, single-instance, dialog open, updater check/install, autostart toggle, and shell.open for opening the data folder.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:webview:default",
+    "core:window:default",
+    "core:app:default",
+    "core:app:allow-version",
+    "core:path:default",
+    "core:path:allow-app-data-dir",
+    "shell:default",
+    "shell:allow-open",
+    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/vigil-sidecar",
+          "sidecar": true,
+          "args": [
+            "--data-dir",
+            { "validator": "^[^\\n\\r]+$" }
+          ]
+        }
+      ]
+    },
+    "updater:default",
+    "dialog:default",
+    "autostart:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
+  ]
+}

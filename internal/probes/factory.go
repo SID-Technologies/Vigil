@@ -1,0 +1,25 @@
+package probes
+
+import (
+	"github.com/sid-technologies/vigil/pkg/errors"
+)
+
+// Build constructs a Probe for the given target, dispatching by Kind.
+//
+// Kept as a free function rather than a registry so the call site in monitor
+// code is straightforward and the dispatch is exhaustive (the compiler
+// warns if a new Kind is added without a case).
+func Build(target Target) (Probe, error) {
+	switch target.Kind {
+	case KindICMP:
+		return NewICMPProbe(target), nil
+	case KindTCP:
+		return NewTCPProbe(target), nil
+	case KindUDPDNS:
+		return NewUDPDNSProbe(target), nil
+	case KindUDPSTUN:
+		return NewUDPSTUNProbe(target), nil
+	default:
+		return nil, errors.New("unknown probe kind: %q", string(target.Kind))
+	}
+}

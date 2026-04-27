@@ -1,31 +1,74 @@
-# Runtime output (may contain personal network data — never commit)
+# ========== Runtime output (may contain personal network data — never commit) ==========
 logs/
 reports/
 test-logs/
 test-reports/
 
-# Secrets
+# ========== Secrets ==========
 .env
 .env.*
 *.env
 
-# Python
+# ========== Python (legacy reference impl in src/pingscraper/) ==========
 __pycache__/
 *.py[cod]
 *.egg-info/
-build/
-dist/
-
-# Virtualenv / uv
 .venv/
 .uv/
-
-# Tooling caches
 .ruff_cache/
 .mypy_cache/
 .pytest_cache/
 
-# IDE
+# ========== Go ==========
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspaces (uncomment if used)
+go.work
+go.work.sum
+
+# Go build output
+/dist
+
+# Vigil sidecar build artifacts
+/cmd/vigil-sidecar/vigil-sidecar
+/cmd/vigil-sidecar/vigil-sidecar.exe
+
+# ========== Node / pnpm ==========
+node_modules
+.pnp.js
+.eslintcache
+
+# Build artifacts
+*.tsbuildinfo
+
+# TypeScript declaration outputs
+packages/*/dist/
+packages/*/*.tsbuildinfo
+apps/*/dist/
+apps/*/*.tsbuildinfo
+
+# Vite
+apps/desktop/build/
+
+# ========== Tauri ==========
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/Cargo.lock
+apps/desktop/src-tauri/gen/schemas/
+
+# Sidecar binaries are produced by build-sidecar.sh — do not commit them
+apps/desktop/src-tauri/binaries/*
+!apps/desktop/src-tauri/binaries/.gitkeep
+
+# ========== Tamagui ==========
+.tamagui/
+
+# ========== Editors / OS ==========
 .vscode/
 .idea/
 *.swp
