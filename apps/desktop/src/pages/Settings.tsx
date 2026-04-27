@@ -1,42 +1,82 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Folder } from '@phosphor-icons/react';
-import { Button, Input, Switch, XStack, YStack, Text } from 'tamagui';
+import { Button, Input, XStack, YStack, Text } from 'tamagui';
 
-import { Card } from '../components/Card';
 import { FormField } from '../components/FormField';
 import { PageHeader } from '../components/PageHeader';
+import { Section } from '../components/Section';
+import { Toggle } from '../components/Toggle';
 import { useAppConfig, useUpdateConfig } from '../hooks/useAppConfig';
+import {
+  CONFIG_BOUNDS,
+  validateField,
+  type ConfigNumericKey,
+} from '../lib/configBounds';
 import type { AppConfig } from '../lib/ipc';
+
+type RawNumeric = Record<ConfigNumericKey, string>;
+
+const NUMERIC_KEYS: ConfigNumericKey[] = [
+  'ping_interval_sec',
+  'ping_timeout_ms',
+  'flush_interval_sec',
+  'retention_raw_days',
+  'retention_5min_days',
+];
+
+function seedRaw(cfg: AppConfig): RawNumeric {
+  return {
+    ping_interval_sec: String(cfg.ping_interval_sec),
+    ping_timeout_ms: String(cfg.ping_timeout_ms),
+    flush_interval_sec: String(cfg.flush_interval_sec),
+    retention_raw_days: String(cfg.retention_raw_days),
+    retention_5min_days: String(cfg.retention_5min_days),
+  };
+}
 
 /**
  * Settings — config form for the singleton app_config row.
  *
- * Important caveat in the UI: changes don't hot-reload the running monitor.
- * Probe interval, timeout, and Wi-Fi sample toggle are read once at startup.
- * After saving, the user has to quit + relaunch (or right-click tray → Quit
- * → reopen) for the new values to take effect. We tell them this clearly.
- *
- * Retention values DO take effect on the next pruner cycle (within an hour)
- * since the pruner re-reads app_config every wakeup — flagged in the form.
+ * Numeric fields keep their own raw text state alongside the parsed AppConfig
+ * draft. This lets users type freely (including transient invalid states like
+ * "0." while typing "0.5") without snap-back, and surfaces validation errors
+ * inline as they type. Save is disabled until every field validates.
  */
 export function SettingsPage() {
   const cfg = useAppConfig();
   const update = useUpdateConfig();
 
   const [draft, setDraft] = useState<AppConfig | null>(null);
+  const [raw, setRaw] = useState<RawNumeric | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
 
-  // Seed draft when fetch lands.
+  // Seed both draft and raw text when fetch lands.
   useEffect(() => {
-    if (cfg.data && draft == null) setDraft(cfg.data);
+    if (cfg.data && draft == null) {
+      setDraft(cfg.data);
+      setRaw(seedRaw(cfg.data));
+    }
   }, [cfg.data, draft]);
 
-  if (!draft) {
+  // Validate every numeric field on each render — cheap, derived state.
+  const errors = useMemo(() => {
+    if (!raw) return {} as Partial<Record<ConfigNumericKey, string>>;
+    const out: Partial<Record<ConfigNumericKey, string>> = {};
+    for (const key of NUMERIC_KEYS) {
+      const r = validateField(key, raw[key]);
+      if (r.error) out[key] = r.error;
+    }
+    return out;
+  }, [raw]);
+
+  const hasErrors = Object.keys(errors).length > 0;
+
+  if (!draft || !raw) {
     return (
       <YStack flex={1}>
         <PageHeader title="Settings" />
         <YStack padding="$4">
-          <Text fontSize={11} color="$color9">Loading…</Text>
+          <Text fontSize={11} color="$color9">One moment…</Text>
         </YStack>
       </YStack>
     );
@@ -44,18 +84,46 @@ export function SettingsPage() {
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(cfg.data);
 
-  const setField = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) =>
+  const setNumeric = (key: ConfigNumericKey, text: string) => {
+    setRaw((prev) => (prev ? { ...prev, [key]: text } : prev));
+    const r = validateField(key, text);
+    if (r.value !== undefined) {
+      setDraft((prev) => (prev ? { ...prev, [key]: r.value as number } : prev));
+    }
+  };
+
+  const setBool = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) =>
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
 
   const onSave = () => {
+    if (hasErrors) return;
     update.mutate(draft, {
       onSuccess: () => setSavedAt(new Date()),
     });
   };
 
   const onRevert = () => {
-    if (cfg.data) setDraft(cfg.data);
+    if (cfg.data) {
+      setDraft(cfg.data);
+      setRaw(seedRaw(cfg.data));
+    }
   };
+
+  // ⌘S / Ctrl+S to save — matches macOS / Windows native conventions.
+  // preventDefault stops the WebKit "save page as HTML" fallback.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (dirty && !hasErrors && !update.isPending) onSave();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, hasErrors, update.isPending]);
+
+  const saveDisabled = !dirty || hasErrors || update.isPending;
 
   return (
     <YStack flex={1}>
@@ -69,10 +137,10 @@ export function SettingsPage() {
             </Button>
             <Button
               size="$3"
-              backgroundColor={dirty ? '$accentBackground' : '$color5'}
-              color={dirty ? '$accentColor' : '$color9'}
+              backgroundColor={!saveDisabled ? '$accentBackground' : '$color5'}
+              color={!saveDisabled ? '$accentColor' : '$color9'}
               onPress={onSave}
-              disabled={!dirty || update.isPending}
+              disabled={saveDisabled}
             >
               {update.isPending ? 'Saving…' : 'Save'}
             </Button>
@@ -80,117 +148,135 @@ export function SettingsPage() {
         }
       />
 
-      <YStack padding="$4" gap="$3" maxWidth={760} width="100%" alignSelf="center">
+      <YStack padding="$4" paddingTop="$2" maxWidth={760} width="100%" alignSelf="center">
         {savedAt && !dirty ? (
-          <Card>
-            <XStack gap="$2" alignItems="center">
-              <YStack
-                width={8}
-                height={8}
-                borderRadius={999}
-                backgroundColor="$accentBackground"
-              />
-              <Text fontSize={12} color="$color11">
-                Saved {savedAt.toLocaleTimeString()}. Changes apply on the next probe cycle — no
-                restart needed.
-              </Text>
-            </XStack>
-          </Card>
+          <XStack
+            gap="$2"
+            alignItems="center"
+            paddingVertical="$2"
+            paddingHorizontal="$3"
+            backgroundColor="$color2"
+            borderRadius="$2"
+            borderLeftWidth={3}
+            borderLeftColor="$accentBackground"
+            marginTop="$3"
+          >
+            <YStack
+              width={8}
+              height={8}
+              borderRadius={999}
+              backgroundColor="$accentBackground"
+            />
+            <Text fontSize={12} color="$color11">
+              Saved {savedAt.toLocaleTimeString()}. Changes apply on the next probe cycle — no
+              restart needed.
+            </Text>
+          </XStack>
         ) : null}
 
-        <Card title="Probe loop">
-          <YStack gap="$3">
-            <FormField
-              label="Ping interval (seconds)"
-              hint="Time between probe cycles. Lower = denser data, higher load. Applies on the next cycle."
-            >
-              <Input
-                size="$3"
-                keyboardType="decimal-pad"
-                value={String(draft.ping_interval_sec)}
-                onChangeText={(v) =>
-                  setField('ping_interval_sec', Number.parseFloat(v) || draft.ping_interval_sec)
-                }
-              />
-            </FormField>
-            <FormField
-              label="Per-probe timeout (ms)"
-              hint="How long a probe waits before failing. Applies on the next cycle."
-            >
-              <Input
-                size="$3"
-                keyboardType="number-pad"
-                value={String(draft.ping_timeout_ms)}
-                onChangeText={(v) =>
-                  setField('ping_timeout_ms', Number.parseInt(v, 10) || draft.ping_timeout_ms)
-                }
-              />
-            </FormField>
-            <FormField
-              label="Flush interval (seconds)"
-              hint="How often the in-memory buffer is written to SQLite. Applies immediately."
-            >
-              <Input
-                size="$3"
-                keyboardType="number-pad"
-                value={String(draft.flush_interval_sec)}
-                onChangeText={(v) =>
-                  setField('flush_interval_sec', Number.parseInt(v, 10) || draft.flush_interval_sec)
-                }
-              />
-            </FormField>
-          </YStack>
-        </Card>
-
-        <Card title="Retention">
-          <YStack gap="$3">
-            <Text fontSize={11} color="$color8">
-              Pruner runs every hour and reads these values fresh — changes apply on the next
-              wakeup, no restart needed.
+        {hasErrors && dirty ? (
+          <XStack
+            gap="$2"
+            alignItems="center"
+            paddingVertical="$2"
+            paddingHorizontal="$3"
+            backgroundColor="$color2"
+            borderRadius="$2"
+            borderLeftWidth={3}
+            borderLeftColor="$red9"
+            marginTop="$3"
+          >
+            <Text fontSize={12} color="$color11">
+              Fix the highlighted fields before saving.
             </Text>
-            <FormField
-              label="Raw samples — keep for (days)"
-              hint="Per-probe rows. Default 7. Each day ~70K rows on the 12-target default config."
-            >
-              <Input
-                size="$3"
-                keyboardType="number-pad"
-                value={String(draft.retention_raw_days)}
-                onChangeText={(v) =>
-                  setField('retention_raw_days', Number.parseInt(v, 10) || draft.retention_raw_days)
-                }
-              />
-            </FormField>
-            <FormField
-              label="5-minute buckets — keep for (days)"
-              hint="Aggregated rollups. Default 90. ~12 buckets/hour × N targets."
-            >
-              <Input
-                size="$3"
-                keyboardType="number-pad"
-                value={String(draft.retention_5min_days)}
-                onChangeText={(v) =>
-                  setField('retention_5min_days', Number.parseInt(v, 10) || draft.retention_5min_days)
-                }
-              />
-            </FormField>
-            <Text fontSize={11} color="$color8">
-              1-hour buckets and outage records are kept forever — they're tiny and the whole
-              point of long-term Vigil is the historical record.
-            </Text>
-          </YStack>
-        </Card>
+          </XStack>
+        ) : null}
 
-        <Card title="Wi-Fi sampling">
-          <XStack alignItems="center" gap="$3">
-            <Switch
+        <Section title="Probe loop">
+          <FormField
+            label="Ping interval (seconds)"
+            hint={`How often Vigil checks each target. Smaller numbers mean richer data; larger numbers are gentler on your network. Default 2.5. Range ${CONFIG_BOUNDS.ping_interval_sec.min}–${CONFIG_BOUNDS.ping_interval_sec.max}.`}
+            error={errors.ping_interval_sec}
+          >
+            <Input
               size="$3"
+              keyboardType="decimal-pad"
+              value={raw.ping_interval_sec}
+              borderColor={errors.ping_interval_sec ? '$red8' : undefined}
+              onChangeText={(v) => setNumeric('ping_interval_sec', v)}
+            />
+          </FormField>
+          <FormField
+            label="Per-probe timeout (ms)"
+            hint={`How long a single probe waits for a response before counting it as failed. Default 2000 ms. Range ${CONFIG_BOUNDS.ping_timeout_ms.min}–${CONFIG_BOUNDS.ping_timeout_ms.max}.`}
+            error={errors.ping_timeout_ms}
+          >
+            <Input
+              size="$3"
+              keyboardType="number-pad"
+              value={raw.ping_timeout_ms}
+              borderColor={errors.ping_timeout_ms ? '$red8' : undefined}
+              onChangeText={(v) => setNumeric('ping_timeout_ms', v)}
+            />
+          </FormField>
+          <FormField
+            label="Flush interval (seconds)"
+            hint={`How often Vigil saves new probe data to disk. Smaller values mean less data lost if Vigil crashes; larger values reduce disk writes. Range ${CONFIG_BOUNDS.flush_interval_sec.min}–${CONFIG_BOUNDS.flush_interval_sec.max}.`}
+            error={errors.flush_interval_sec}
+          >
+            <Input
+              size="$3"
+              keyboardType="number-pad"
+              value={raw.flush_interval_sec}
+              borderColor={errors.flush_interval_sec ? '$red8' : undefined}
+              onChangeText={(v) => setNumeric('flush_interval_sec', v)}
+            />
+          </FormField>
+        </Section>
+
+        <Section
+          title="Retention"
+          description="The pruner runs every hour and reads these values fresh — changes apply on the next wakeup, no restart needed."
+        >
+          <FormField
+            label="Raw samples — keep for (days)"
+            hint={`How many days of detailed per-probe records to keep. After this, only the 5-minute and 1-hour summaries remain — still plenty for charts, but you can't drill down to individual probes. Default 7. Range ${CONFIG_BOUNDS.retention_raw_days.min}–${CONFIG_BOUNDS.retention_raw_days.max}.`}
+            error={errors.retention_raw_days}
+          >
+            <Input
+              size="$3"
+              keyboardType="number-pad"
+              value={raw.retention_raw_days}
+              borderColor={errors.retention_raw_days ? '$red8' : undefined}
+              onChangeText={(v) => setNumeric('retention_raw_days', v)}
+            />
+          </FormField>
+          <FormField
+            label="5-minute buckets — keep for (days)"
+            hint={`How many days of 5-minute summaries to keep. These power the History page charts. Default 90. Range ${CONFIG_BOUNDS.retention_5min_days.min}–${CONFIG_BOUNDS.retention_5min_days.max}.`}
+            error={errors.retention_5min_days}
+          >
+            <Input
+              size="$3"
+              keyboardType="number-pad"
+              value={raw.retention_5min_days}
+              borderColor={errors.retention_5min_days ? '$red8' : undefined}
+              onChangeText={(v) => setNumeric('retention_5min_days', v)}
+            />
+          </FormField>
+          <Text fontSize={11} color="$color8">
+            1-hour buckets and outage records are kept forever — they're tiny and the whole
+            point of long-term Vigil is the historical record.
+          </Text>
+        </Section>
+
+        <Section title="Wi-Fi sampling">
+          <XStack alignItems="center" gap="$3">
+            <Toggle
               checked={draft.wifi_sample_enabled}
-              onCheckedChange={(v) => setField('wifi_sample_enabled', v)}
-              backgroundColor={draft.wifi_sample_enabled ? '$accentBackground' : '$color5'}
-            >
-              <Switch.Thumb animation="quick" />
-            </Switch>
+              onCheckedChange={(v) => setBool('wifi_sample_enabled', v)}
+              size="md"
+            />
             <YStack flex={1} gap="$0.5">
               <Text fontSize={13} color="$color12">
                 Capture Wi-Fi state every flush
@@ -202,22 +288,27 @@ export function SettingsPage() {
               </Text>
             </YStack>
           </XStack>
-        </Card>
+        </Section>
 
-        <DataFolderCard />
+        <Section
+          title="Data folder"
+          description="SQLite database, log file, and cached settings live here."
+        >
+          <DataFolderRow />
+        </Section>
       </YStack>
     </YStack>
   );
 }
 
 /**
- * Open the OS file manager to the data folder. Uses the shell plugin's
- * `open` API which we already permitted in capabilities/default.json.
+ * Path display + Open button. Wrapped by a Section in the parent so we
+ * don't duplicate the title — the Section provides the heading and
+ * description, this row just renders the path and the action.
  */
-function DataFolderCard() {
+function DataFolderRow() {
   const [path, setPath] = useState<string | null>(null);
 
-  // Tauri 2's path API exposes app_data_dir via JS — fetch it once.
   useEffect(() => {
     import('@tauri-apps/api/path')
       .then(({ appDataDir }) => appDataDir())
@@ -228,36 +319,27 @@ function DataFolderCard() {
   const openFolder = async () => {
     if (!path) return;
     try {
-      const { open } = await import('@tauri-apps/plugin-shell');
-      await open(path);
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(path);
     } catch (err) {
-      // Plugin not permitted or shell.open denied. Surface but don't crash.
       console.warn('Failed to open data folder:', err);
     }
   };
 
   return (
-    <Card title="Data folder">
-      <YStack gap="$2">
-        <Text fontSize={11} color="$color8">
-          SQLite database, log file, and cached settings live here.
-        </Text>
-        <XStack gap="$2" alignItems="center" flexWrap="wrap">
-          <Text fontSize={11} color="$color11" fontFamily="$body" flex={1} numberOfLines={1}>
-            {path ?? '…'}
-          </Text>
-          <Button
-            size="$2"
-            chromeless
-            icon={<Folder size={12} color="var(--color9)" />}
-            onPress={openFolder}
-            disabled={!path}
-          >
-            <Text fontSize={11} color="$color11">Open</Text>
-          </Button>
-        </XStack>
-      </YStack>
-    </Card>
+    <XStack gap="$2" alignItems="center" flexWrap="wrap">
+      <Text fontSize={11} color="$color11" fontFamily="$body" flex={1} numberOfLines={1}>
+        {path ?? '…'}
+      </Text>
+      <Button
+        size="$2"
+        chromeless
+        icon={<Folder size={12} color="var(--color9)" />}
+        onPress={openFolder}
+        disabled={!path}
+      >
+        <Text fontSize={11} color="$color11">Open</Text>
+      </Button>
+    </XStack>
   );
 }
-

@@ -1,4 +1,4 @@
-import { XStack, Text } from 'tamagui';
+import { XStack, YStack, Text } from 'tamagui';
 
 import { useColorPalette } from '../hooks/useColorPalette';
 import type { Target } from '../lib/ipc';
@@ -9,20 +9,25 @@ interface TargetMultiSelectProps {
   onToggle: (label: string) => void;
   onSetAll: (labels: string[]) => void;
   onClear: () => void;
-  /** Optional emptyMessage shown when nothing's selected. */
+  /** Optional message shown next to the quick-filter bar when nothing's selected. */
   emptyMessage?: string;
 }
 
 /**
- * Reusable multi-select for target labels. Used by History page (shared
- * with the dashboard, but here as a chip cloud you can clear/replace
- * wholesale).
+ * Reusable multi-select for target labels. Two-row layout:
+ *
+ *   Row 1: quick-filter chips (All / ICMP / TCP / UDP / Clear) + a status
+ *          line ("None selected — chart shows all targets" or "N selected")
+ *   Row 2: every target as a click-to-toggle chip, ALWAYS visible.
  *
  * Each chip:
- *   - colored ring matches palette color (consistent with Dashboard tiles)
- *   - click toggles inclusion
+ *   - Colored dot + border matching palette when selected (matches the
+ *     Dashboard tile colors so a target is the same color everywhere)
+ *   - Click toggles inclusion in the parent's `selected` array
  *
- * Quick-select bar at the top: All / by-kind / Clear.
+ * Showing per-target chips unconditionally means the user can drill into
+ * a specific target without first clicking "All" or any quick-filter —
+ * which was previously the only way to surface them.
  */
 export function TargetMultiSelect({
   allTargets,
@@ -37,24 +42,26 @@ export function TargetMultiSelect({
   const labelsByKind = (kinds: string[]) =>
     allTargets.filter((t) => kinds.includes(t.kind)).map((t) => t.label);
 
+  const status =
+    selected.length === 0
+      ? emptyMessage ?? 'None selected'
+      : `${selected.length} of ${allTargets.length} selected`;
+
   return (
-    <XStack flexWrap="wrap" gap="$1.5" alignItems="center">
-      <QuickChip label="All" onPress={() => onSetAll(allTargets.map((t) => t.label))} />
-      <QuickChip label="ICMP" onPress={() => onSetAll(labelsByKind(['icmp']))} />
-      <QuickChip label="TCP" onPress={() => onSetAll(labelsByKind(['tcp']))} />
-      <QuickChip label="UDP" onPress={() => onSetAll(labelsByKind(['udp_dns', 'udp_stun']))} />
-      <QuickChip label="Clear" onPress={onClear} muted />
-
-      <Text fontSize={11} color="$color8" marginHorizontal="$2">
-        ·
-      </Text>
-
-      {selected.length === 0 && emptyMessage ? (
-        <Text fontSize={11} color="$color8">
-          {emptyMessage}
+    <YStack gap="$2">
+      <XStack flexWrap="wrap" gap="$1.5" alignItems="center">
+        <QuickChip label="All" onPress={() => onSetAll(allTargets.map((t) => t.label))} />
+        <QuickChip label="ICMP" onPress={() => onSetAll(labelsByKind(['icmp']))} />
+        <QuickChip label="TCP" onPress={() => onSetAll(labelsByKind(['tcp']))} />
+        <QuickChip label="UDP" onPress={() => onSetAll(labelsByKind(['udp_dns', 'udp_stun']))} />
+        <QuickChip label="Clear" onPress={onClear} muted />
+        <Text fontSize={11} color="$color8" marginLeft="$2">
+          {status}
         </Text>
-      ) : (
-        allTargets.map((t) => {
+      </XStack>
+
+      <XStack flexWrap="wrap" gap="$1.5" alignItems="center">
+        {allTargets.map((t) => {
           const active = selected.includes(t.label);
           const color = getColor(t.label);
           return (
@@ -66,10 +73,10 @@ export function TargetMultiSelect({
               paddingVertical="$1"
               borderRadius="$1.5"
               borderWidth={1}
-              borderColor={active ? color : '$borderColor'}
+              borderColor={active ? (color as any) : '$borderColor'}
               backgroundColor={active ? '$color3' : 'transparent'}
               cursor="pointer"
-              hoverStyle={{ backgroundColor: '$color3' }}
+              hoverStyle={{ backgroundColor: '$color3', borderColor: active ? (color as any) : '$color8' }}
               pressStyle={{ opacity: 0.85 }}
               onPress={() => onToggle(t.label)}
               animation="quick"
@@ -89,9 +96,9 @@ export function TargetMultiSelect({
               </Text>
             </XStack>
           );
-        })
-      )}
-    </XStack>
+        })}
+      </XStack>
+    </YStack>
   );
 }
 

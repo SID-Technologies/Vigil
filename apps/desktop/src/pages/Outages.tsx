@@ -4,6 +4,7 @@ import { XStack, YStack, Text, Separator } from 'tamagui';
 
 import { Card } from '../components/Card';
 import { PageHeader } from '../components/PageHeader';
+import { RowSkeleton } from '../components/Skeleton';
 import { TimeRangePicker, defaultRange, type TimeRange } from '../components/TimeRangePicker';
 import { useOutages, type Outage } from '../hooks/useOutages';
 import { useTargets } from '../hooks/useTargets';
@@ -59,8 +60,8 @@ export function OutagesPage() {
         title="Outages"
         blurb="Every detected reachability gap (3+ consecutive failures of one target or every probe) recorded since the sidecar started. Pruned: never."
       />
-      <YStack padding="$4" gap="$3" maxWidth={1100} width="100%" alignSelf="center">
-        <Card>
+      <YStack padding="$4" gap="$4" maxWidth={1100} width="100%" alignSelf="center">
+        <Card variant="quiet">
           <YStack gap="$3">
             <XStack gap="$3" alignItems="center" flexWrap="wrap">
               <Text fontSize={11} color="$color10" letterSpacing={0.4} fontWeight="600">
@@ -97,19 +98,21 @@ export function OutagesPage() {
 
         {outages.isLoading && !outages.data ? (
           <Card>
-            <YStack height={120} alignItems="center" justifyContent="center">
-              <Text fontSize={12} color="$color9">Loading…</Text>
+            <YStack gap="$2">
+              <RowSkeleton />
+              <RowSkeleton />
+              <RowSkeleton />
+              <RowSkeleton />
             </YStack>
           </Card>
         ) : all.length === 0 ? (
           <Card>
             <YStack height={120} alignItems="center" justifyContent="center" gap="$1">
               <Text fontSize={14} color="$accentBackground" fontWeight="600">
-                No outages recorded
+                Nothing to report
               </Text>
               <Text fontSize={11} color="$color8" textAlign="center" maxWidth={420}>
-                Either the sidecar hasn't been running long enough OR your network has been
-                stable. Both are good problems to have.
+                No outages in this window. Either Vigil is fresh or your network's been steady — both are good news.
               </Text>
             </YStack>
           </Card>

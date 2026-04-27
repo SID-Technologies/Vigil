@@ -30,7 +30,10 @@
       "Bash(.venv/Scripts/ruff.exe check *)",
       "Bash(chmod +x /Users/danflanagan/Documents/GitHub/PingScrapper/scripts/build-sidecar.sh)",
       "Bash(python3 *)",
-      "Bash(chmod +x *)"
+      "Bash(chmod +x *)",
+      "Bash(grep -rn '\\\\$accentBackground\\\\|\\\\$red10\\\\|\\\\$yellow10\\\\|\\\\$accentColor\\\\|color=\"\\\\$red' /Users/danflanagan/Documents/GitHub/PingScrapper/apps/desktop/src/)",
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)"
     ]
   }
 }

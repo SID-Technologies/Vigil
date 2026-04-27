@@ -104,19 +104,19 @@ function computeMessage(
   }
   if (!latest) {
     return {
-      headline: 'Connecting…',
-      detail: 'Waiting for first probe cycle.',
+      headline: 'Settling in',
+      detail: 'First report in just a moment — Vigil checks every 2.5 seconds.',
     };
   }
   const pct = latest.total > 0 ? Math.round((latest.ok / latest.total) * 100) : 0;
   if (pct >= 100) {
     return {
       headline: 'All systems nominal',
-      detail: `Last cycle: ${latest.ok}/${latest.total} probes succeeded · ${new Date(latest.ts_unix_ms).toLocaleTimeString()}`,
+      detail: `Just checked ${latest.total} targets — all reachable · ${new Date(latest.ts_unix_ms).toLocaleTimeString()}`,
     };
   }
   return {
-    headline: `${latest.fail}/${latest.total} probes failed last cycle`,
-    detail: `${pct}% reachability — outage threshold is 3 consecutive failures.`,
+    headline: `${latest.fail} of ${latest.total} targets unreachable just now`,
+    detail: `${pct}% reachability. If this lasts 3 cycles in a row, Vigil records it as an outage.`,
   };
 }

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { XStack, YStack, Text, Separator } from 'tamagui';
 
 import { Card } from './Card';
+import { RowSkeleton } from './Skeleton';
 import { useOutages, type Outage } from '../hooks/useOutages';
 
 /**
@@ -30,18 +31,17 @@ export function OutagesCard() {
       }
     >
       {isLoading && !data ? (
-        <YStack height={80} alignItems="center" justifyContent="center">
-          <Text fontSize={11} color="$color8">
-            Loading…
-          </Text>
+        <YStack gap="$2">
+          <RowSkeleton />
+          <RowSkeleton />
         </YStack>
       ) : open.length === 0 && resolved.length === 0 ? (
         <YStack height={80} alignItems="center" justifyContent="center" gap="$1">
           <Text fontSize={13} color="$accentBackground" fontWeight="600">
-            No outages detected
+            All quiet
           </Text>
-          <Text fontSize={11} color="$color8">
-            Clean week — every probe stayed within 3 consecutive failures of healthy.
+          <Text fontSize={11} color="$color8" textAlign="center">
+            No outages this week. Either Vigil is fresh or your network's been steady.
           </Text>
         </YStack>
       ) : (

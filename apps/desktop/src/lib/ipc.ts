@@ -7,17 +7,26 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
+import { translateError } from './errorMessages';
+
 export interface IpcError {
   code: string;
   message: string;
 }
 
+/**
+ * Error thrown when a sidecar IPC call fails. The `.message` is a
+ * user-friendly translation; the original technical message is on
+ * `.technicalDetail` for debugging / logging.
+ */
 export class VigilIpcError extends Error {
   code: string;
+  technicalDetail: string;
   constructor(err: IpcError) {
-    super(err.message);
+    super(translateError(err.code, err.message));
     this.name = 'VigilIpcError';
     this.code = err.code;
+    this.technicalDetail = err.message;
   }
 }
 

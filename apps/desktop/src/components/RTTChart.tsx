@@ -14,12 +14,14 @@ import { XStack, YStack, Text } from 'tamagui';
 
 import { Card } from './Card';
 import { ChartFilterBar } from './ChartFilterBar';
+import { ChartTooltip } from './ChartTooltip';
 import { PulsingDot } from './PulsingDot';
 import { RefreshIndicator } from './RefreshIndicator';
+import { ChartSkeleton } from './Skeleton';
 import { useColorPalette } from '../hooks/useColorPalette';
 import { useLiveSamples } from '../hooks/useLiveSamples';
 import { useSamplesQuery } from '../hooks/useSamplesQuery';
-import { useTargets } from '../hooks/useTargets';
+import { useAllProbeTargets } from '../hooks/useAllProbeTargets';
 import type { AggregatedRow } from '../lib/ipc';
 
 interface RTTChartProps {
@@ -45,7 +47,7 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
   const toMs = useMemo(() => Date.now(), []);
 
   const { tick } = useLiveSamples(); // for the live pulse heartbeat
-  const targets = useTargets();
+  const allTargets = useAllProbeTargets();
   const samples = useSamplesQuery({
     fromMs,
     toMs,
@@ -84,23 +86,23 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
       }
     >
       <ChartFilterBar
-        allTargets={targets.data ?? []}
+        allTargets={allTargets}
         selected={selectedLabels}
         onSetAll={onSetAll}
         onClear={onClear}
       />
 
       {isLoading ? (
-        <ChartEmptyState
-          headline="Loading…"
-          detail="Fetching the last hour of aggregated samples."
-        />
+        <ChartSkeleton />
       ) : isError ? (
-        <ChartEmptyState headline="Error" detail="Sample query failed — sidecar may be down." />
+        <ChartEmptyState
+          headline="Couldn't fetch samples"
+          detail="The sidecar may have stopped. Try restarting Vigil from the tray menu."
+        />
       ) : isEmpty ? (
         <ChartEmptyState
-          headline="No buckets yet"
-          detail="The first 5-minute bucket lands ~6 minutes after the sidecar starts."
+          headline="Nothing yet"
+          detail="Vigil's first 5-minute summary lands about 6 minutes after start. Until then, you'll see live data on the tiles below."
         />
       ) : selectedLabels.length === 0 ? (
         <MedianAreaChart data={data as MedianPoint[]} />
@@ -157,7 +159,10 @@ function MedianAreaChart({ data }: { data: MedianPoint[] }) {
           <CartesianGrid stroke="var(--borderColor)" strokeDasharray="3 3" />
           <XAxis dataKey="ts" tickFormatter={fmtTime} {...axisStyle} />
           <YAxis {...axisStyle} width={42} label={yLabel} />
-          <Tooltip {...tooltipStyle} labelFormatter={fmtTimeLong} formatter={msFormatter('p50')} />
+          <Tooltip
+            content={<ChartTooltip formatLabel={fmtTimeLong} unit="ms" caption="median p50 across targets" />}
+            cursor={{ stroke: 'var(--color8)', strokeWidth: 1, strokeDasharray: '3 3' }}
+          />
           <Area
             type="monotone"
             dataKey="medianP50"
@@ -194,9 +199,8 @@ function PerTargetLineChart({
           <XAxis dataKey="ts" tickFormatter={fmtTime} {...axisStyle} />
           <YAxis {...axisStyle} width={42} label={yLabel} />
           <Tooltip
-            {...tooltipStyle}
-            labelFormatter={fmtTimeLong}
-            formatter={(v: number, name: string) => [`${v.toFixed(2)} ms`, name]}
+            content={<ChartTooltip formatLabel={fmtTimeLong} unit="ms" />}
+            cursor={{ stroke: 'var(--color8)', strokeWidth: 1, strokeDasharray: '3 3' }}
           />
           {selectedLabels.map((label) => (
             <Line

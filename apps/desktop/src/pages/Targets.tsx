@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash, Lock, Check } from '@phosphor-icons/react';
-import { Button, Input, Select, XStack, YStack, Text, Switch } from 'tamagui';
+import { Button, Input, Select, XStack, YStack, Text } from 'tamagui';
 
 import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FormField } from '../components/FormField';
 import { Modal } from '../components/Modal';
 import { PageHeader } from '../components/PageHeader';
+import { RowSkeleton } from '../components/Skeleton';
+import { Toggle } from '../components/Toggle';
 import {
   useCreateTarget,
   useDeleteTarget,
@@ -102,61 +104,67 @@ export function TargetsPage() {
 
   return (
     <YStack flex={1}>
-      <PageHeader
-        title="Targets"
-        blurb="Probe destinations. 12 built-in targets ship with Vigil; add your own to test routes that matter to you."
-        trailing={
-          <Button
-            size="$3"
-            backgroundColor="$accentBackground"
-            color="$accentColor"
-            icon={<Plus size={14} color="var(--accentColor)" />}
-            onPress={() => setAddOpen(true)}
-            hoverStyle={{ opacity: 0.9 }}
-          >
-            Add target
-          </Button>
-        }
-      />
+      {selected.size > 0 ? (
+        <SelectionHeader
+          selectedCount={selected.size}
+          deletableCount={deletableSelected.length}
+          onEnable={() => bulkSetEnabled(true)}
+          onDisable={() => bulkSetEnabled(false)}
+          onDelete={() => setBulkDeleteOpen(true)}
+          onClear={() => setSelected(new Set())}
+        />
+      ) : (
+        <PageHeader
+          title="Targets"
+          blurb="Probe destinations. 12 built-in targets ship with Vigil; add your own to test routes that matter to you."
+          trailing={
+            <Button
+              size="$3"
+              backgroundColor="$accentBackground"
+              color="$accentColor"
+              icon={<Plus size={14} color="var(--accentColor)" />}
+              onPress={() => setAddOpen(true)}
+              hoverStyle={{ opacity: 0.9 }}
+            >
+              Add target
+            </Button>
+          }
+        />
+      )}
 
       <YStack padding="$4" gap="$3" maxWidth={1100} width="100%" alignSelf="center">
-        {selected.size > 0 ? (
-          <BulkActionBar
-            selectedCount={selected.size}
-            deletableCount={deletableSelected.length}
-            onEnable={() => bulkSetEnabled(true)}
-            onDisable={() => bulkSetEnabled(false)}
-            onDelete={() => setBulkDeleteOpen(true)}
-            onClear={() => setSelected(new Set())}
-          />
-        ) : null}
-
         <Card>
           <YStack gap="$1">
             <XStack paddingVertical="$1" paddingHorizontal="$2" gap="$3" alignItems="center">
               <YStack width={32} alignItems="center">
                 <Checkbox checked={allSelected} onPress={toggleAll} />
               </YStack>
-              <Text width={56} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-                ON
-              </Text>
-              <Text flex={2} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-                LABEL
-              </Text>
-              <Text width={80} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-                KIND
-              </Text>
-              <Text flex={2} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-                HOST:PORT
-              </Text>
-              <Text width={120} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-                ACTIONS
-              </Text>
+              <YStack width={56}>
+                <HeaderCell>ON</HeaderCell>
+              </YStack>
+              <YStack flexBasis={0} flexGrow={2} minWidth={180}>
+                <HeaderCell>LABEL</HeaderCell>
+              </YStack>
+              <YStack width={80}>
+                <HeaderCell>KIND</HeaderCell>
+              </YStack>
+              <YStack flexBasis={0} flexGrow={2} minWidth={180}>
+                <HeaderCell>HOST:PORT</HeaderCell>
+              </YStack>
+              <YStack width={120}>
+                <HeaderCell>ACTIONS</HeaderCell>
+              </YStack>
             </XStack>
             {targets.isLoading && !targets.data ? (
-              <Text fontSize={11} color="$color8" padding="$2">Loading…</Text>
+              <YStack gap="$1.5" padding="$1">
+                <RowSkeleton />
+                <RowSkeleton />
+                <RowSkeleton />
+              </YStack>
             ) : sorted.length === 0 ? (
-              <Text fontSize={11} color="$color8" padding="$2">No targets configured.</Text>
+              <Text fontSize={11} color="$color8" padding="$2">
+                No targets yet. Click "Add target" to start monitoring something.
+              </Text>
             ) : (
               sorted.map((t) => (
                 <TargetRow
@@ -213,7 +221,17 @@ export function TargetsPage() {
   );
 }
 
-function BulkActionBar({
+/**
+ * SelectionHeader — replaces the page's normal header when one or more
+ * targets are checkbox-selected. Same vertical footprint as PageHeader so
+ * there's zero layout shift when toggling between them.
+ *
+ * Pattern matches Linear / Gmail / Notion: when you start selecting rows,
+ * the page header transforms to show "N selected" + bulk actions. Way more
+ * discoverable than a separate floating bar, and the user knows exactly
+ * how to exit selection mode (Clear, top-right).
+ */
+function SelectionHeader({
   selectedCount,
   deletableCount,
   onEnable,
@@ -230,41 +248,54 @@ function BulkActionBar({
 }) {
   return (
     <XStack
+      paddingHorizontal="$4"
+      paddingVertical="$3"
+      borderBottomWidth={1}
+      borderBottomColor="$accentBackground"
       backgroundColor="$color3"
-      borderWidth={1}
-      borderColor="$accentBackground"
-      borderRadius="$3"
-      paddingHorizontal="$3"
-      paddingVertical="$2"
       alignItems="center"
-      gap="$2"
+      justifyContent="space-between"
+      gap="$3"
       animation="quick"
     >
-      <Text fontSize={12} color="$color12" fontWeight="600">
-        {selectedCount} selected
-      </Text>
-      <YStack flex={1} />
-      <Button size="$2" chromeless onPress={onEnable}>
-        Enable
-      </Button>
-      <Button size="$2" chromeless onPress={onDisable}>
-        Disable
-      </Button>
-      <Button
-        size="$2"
-        chromeless
-        onPress={onDelete}
-        disabled={deletableCount === 0}
-        opacity={deletableCount === 0 ? 0.4 : 1}
-      >
-        <Text fontSize={11} color="$red10" fontWeight="600">
-          Delete
+      <YStack gap="$0.5" flex={1}>
+        <Text fontSize={20} fontWeight="700" color="$color12" fontFamily="$heading">
+          {selectedCount} target{selectedCount === 1 ? '' : 's'} selected
         </Text>
-      </Button>
-      <YStack width={1} height={20} backgroundColor="$borderColor" marginHorizontal="$1" />
-      <Button size="$2" chromeless onPress={onClear}>
-        Clear
-      </Button>
+        <Text fontSize={12} color="$color9">
+          {deletableCount === selectedCount
+            ? 'All selected items can be deleted.'
+            : `${selectedCount - deletableCount} builtin item(s) will be skipped on delete.`}
+        </Text>
+      </YStack>
+      <XStack gap="$2" alignItems="center">
+        <Button size="$3" chromeless onPress={onEnable}>
+          Enable
+        </Button>
+        <Button size="$3" chromeless onPress={onDisable}>
+          Disable
+        </Button>
+        <Button
+          size="$3"
+          chromeless
+          onPress={onDelete}
+          disabled={deletableCount === 0}
+          opacity={deletableCount === 0 ? 0.4 : 1}
+        >
+          <Text fontSize={13} color="$red10" fontWeight="600">
+            Delete
+          </Text>
+        </Button>
+        <YStack width={1} height={20} backgroundColor="$borderColor" marginHorizontal="$1" />
+        <Button
+          size="$3"
+          backgroundColor="$accentBackground"
+          color="$accentColor"
+          onPress={onClear}
+        >
+          Clear
+        </Button>
+      </XStack>
     </XStack>
   );
 }
@@ -321,16 +352,9 @@ function TargetRow({
         <Checkbox checked={selected} onPress={onToggleSelected} />
       </YStack>
       <YStack width={56}>
-        <Switch
-          size="$2"
-          checked={target.enabled}
-          onCheckedChange={onToggleEnabled}
-          backgroundColor={target.enabled ? '$accentBackground' : '$color5'}
-        >
-          <Switch.Thumb animation="quick" />
-        </Switch>
+        <Toggle checked={target.enabled} onCheckedChange={onToggleEnabled} />
       </YStack>
-      <XStack flex={2} alignItems="center" gap="$1.5">
+      <XStack flexBasis={0} flexGrow={2} minWidth={180} alignItems="center" gap="$1.5">
         <Text fontSize={12} color="$color12" fontWeight="600" numberOfLines={1}>
           {target.label}
         </Text>
@@ -338,12 +362,16 @@ function TargetRow({
           <Lock size={11} color="var(--color8)" weight="fill" />
         ) : null}
       </XStack>
-      <Text width={80} fontSize={11} color="$color9" letterSpacing={0.5}>
-        {target.kind.toUpperCase()}
-      </Text>
-      <Text flex={2} fontSize={11} color="$color11" fontFamily="$body" numberOfLines={1}>
-        {target.host}{target.port ? `:${target.port}` : ''}
-      </Text>
+      <YStack width={80}>
+        <Text fontSize={11} color="$color9" letterSpacing={0.5}>
+          {target.kind.toUpperCase()}
+        </Text>
+      </YStack>
+      <YStack flexBasis={0} flexGrow={2} minWidth={180}>
+        <Text fontSize={11} color="$color11" fontFamily="$body" numberOfLines={1}>
+          {target.host}{target.port ? `:${target.port}` : ''}
+        </Text>
+      </YStack>
       <XStack width={120} gap="$1">
         {target.is_builtin ? (
           <Text fontSize={10} color="$color8" fontStyle="italic">
@@ -366,6 +394,52 @@ function TargetRow({
   );
 }
 
+/**
+ * Header cell typography. Wrapped in YStack of fixed/flex width by the
+ * caller so the column constraints match the row exactly.
+ */
+function HeaderCell({ children }: { children: React.ReactNode }) {
+  return (
+    <Text fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600" numberOfLines={1}>
+      {children}
+    </Text>
+  );
+}
+
+// Label rules: short identifier shown in chips and used as a query
+// discriminator. Whitespace would break URL/event-name encoding; the 40-char
+// cap keeps chip widths sane. Snake_case is a recommendation, not a hard rule.
+const LABEL_MAX = 40;
+const LABEL_PATTERN = /^[A-Za-z0-9_\-.]+$/;
+
+// Host: don't try to fully parse — the sidecar resolves DNS and surfaces
+// real errors. Just block empties and obvious typos (spaces, schemes).
+function validateHost(raw: string): string | undefined {
+  const v = raw.trim();
+  if (!v) return 'Required.';
+  if (/\s/.test(v)) return 'No spaces allowed.';
+  if (/^[a-z]+:\/\//i.test(v)) return 'Drop the scheme — host only.';
+  if (v.length > 253) return 'Too long.';
+  return undefined;
+}
+
+function validateLabel(raw: string): string | undefined {
+  const v = raw.trim();
+  if (!v) return 'Required.';
+  if (v.length > LABEL_MAX) return `At most ${LABEL_MAX} characters.`;
+  if (!LABEL_PATTERN.test(v)) return 'Letters, numbers, _ - . only.';
+  return undefined;
+}
+
+function validatePort(raw: string): string | undefined {
+  const v = raw.trim();
+  if (!v) return 'Required.';
+  if (!/^\d+$/.test(v)) return 'Whole numbers only.';
+  const n = Number.parseInt(v, 10);
+  if (n < 1 || n > 65535) return 'Range 1–65535.';
+  return undefined;
+}
+
 function AddTargetModal({
   open,
   onOpenChange,
@@ -378,51 +452,51 @@ function AddTargetModal({
   const [kind, setKind] = useState<ProbeKind>('icmp');
   const [host, setHost] = useState('');
   const [port, setPort] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  // Server-side errors (e.g. duplicate label) live separately from
+  // client-side validation since they only land after a submit attempt.
+  const [serverError, setServerError] = useState<string | null>(null);
+  // Track which fields the user has interacted with — avoids screaming
+  // "Required" on a freshly-opened, empty modal.
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const kindOpt = KIND_OPTIONS.find((k) => k.value === kind)!;
+
+  const labelErr = validateLabel(label);
+  const hostErr = validateHost(host);
+  const portErr = kindOpt.needsPort ? validatePort(port) : undefined;
+  const hasErrors = !!(labelErr || hostErr || portErr);
 
   const reset = () => {
     setLabel('');
     setKind('icmp');
     setHost('');
     setPort('');
-    setError(null);
+    setServerError(null);
+    setTouched({});
   };
 
   const submit = () => {
-    if (!label.trim() || !host.trim()) {
-      setError('Label and host are required.');
+    setServerError(null);
+    if (hasErrors) {
+      // Reveal all errors at once on failed submit.
+      setTouched({ label: true, host: true, port: true });
       return;
     }
+    const payload: { label: string; kind: ProbeKind; host: string; port?: number } = {
+      label: label.trim(),
+      kind,
+      host: host.trim(),
+    };
     if (kindOpt.needsPort) {
-      const p = Number.parseInt(port, 10);
-      if (!Number.isFinite(p) || p <= 0 || p > 65535) {
-        setError('Port must be between 1 and 65535.');
-        return;
-      }
-      create.mutate(
-        { label: label.trim(), kind, host: host.trim(), port: p },
-        {
-          onSuccess: () => {
-            reset();
-            onOpenChange(false);
-          },
-          onError: (e: any) => setError(e.message ?? 'Create failed'),
-        },
-      );
-      return;
+      payload.port = Number.parseInt(port.trim(), 10);
     }
-    create.mutate(
-      { label: label.trim(), kind, host: host.trim() },
-      {
-        onSuccess: () => {
-          reset();
-          onOpenChange(false);
-        },
-        onError: (e: any) => setError(e.message ?? 'Create failed'),
+    create.mutate(payload, {
+      onSuccess: () => {
+        reset();
+        onOpenChange(false);
       },
-    );
+      onError: (e: any) => setServerError(e.message ?? 'Create failed'),
+    });
   };
 
   return (
@@ -441,10 +515,10 @@ function AddTargetModal({
           </Button>
           <Button
             size="$3"
-            backgroundColor="$accentBackground"
-            color="$accentColor"
+            backgroundColor={hasErrors ? '$color5' : '$accentBackground'}
+            color={hasErrors ? '$color9' : '$accentColor'}
             onPress={submit}
-            disabled={create.isPending}
+            disabled={create.isPending || hasErrors}
           >
             {create.isPending ? 'Adding…' : 'Add target'}
           </Button>
@@ -452,12 +526,19 @@ function AddTargetModal({
       }
     >
       <YStack gap="$3">
-        <FormField label="Label" hint="Unique short name. Lowercase, snake_case recommended.">
+        <FormField
+          label="Label"
+          hint="Unique short name. Lowercase, snake_case recommended."
+          error={touched.label ? labelErr : undefined}
+        >
           <Input
             size="$3"
             placeholder="e.g. my_office_router"
             value={label}
+            maxLength={LABEL_MAX}
+            borderColor={touched.label && labelErr ? '$red8' : undefined}
             onChangeText={setLabel}
+            onBlur={() => setTouched((t) => ({ ...t, label: true }))}
           />
         </FormField>
 
@@ -480,30 +561,42 @@ function AddTargetModal({
           </Select>
         </FormField>
 
-        <FormField label="Host" hint="IP or hostname.">
+        <FormField
+          label="Host"
+          hint="IP or hostname."
+          error={touched.host ? hostErr : undefined}
+        >
           <Input
             size="$3"
             placeholder="e.g. 192.168.1.1 or example.com"
             value={host}
+            borderColor={touched.host && hostErr ? '$red8' : undefined}
             onChangeText={setHost}
+            onBlur={() => setTouched((t) => ({ ...t, host: true }))}
           />
         </FormField>
 
         {kindOpt.needsPort ? (
-          <FormField label="Port" hint="Required for TCP/UDP. 1–65535.">
+          <FormField
+            label="Port"
+            hint="Required for TCP/UDP. 1–65535."
+            error={touched.port ? portErr : undefined}
+          >
             <Input
               size="$3"
               placeholder="e.g. 443"
               keyboardType="number-pad"
               value={port}
+              borderColor={touched.port && portErr ? '$red8' : undefined}
               onChangeText={setPort}
+              onBlur={() => setTouched((t) => ({ ...t, port: true }))}
             />
           </FormField>
         ) : null}
 
-        {error ? (
+        {serverError ? (
           <Text fontSize={11} color="$red10">
-            {error}
+            {serverError}
           </Text>
         ) : null}
       </YStack>

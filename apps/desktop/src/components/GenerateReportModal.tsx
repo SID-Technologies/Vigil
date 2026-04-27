@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Folder, FileCsv, FileText, FileHtml, Check } from '@phosphor-icons/react';
-import { Button, Switch, XStack, YStack, Text } from 'tamagui';
+import { Button, XStack, YStack, Text } from 'tamagui';
+
+import { Toggle } from './Toggle';
 
 import { Modal } from './Modal';
 import { reportGenerate, type ReportFormat } from '../lib/ipc';
@@ -97,8 +99,8 @@ export function GenerateReportModal({
   const reveal = async () => {
     if (!outDir) return;
     try {
-      const { open: openShell } = await import('@tauri-apps/plugin-shell');
-      await openShell(outDir);
+      const { openPath } = await import('@tauri-apps/plugin-opener');
+      await openPath(outDir);
     } catch (e) {
       console.warn('Failed to open folder:', e);
     }
@@ -269,14 +271,7 @@ function FormatRow({
           {hint}
         </Text>
       </YStack>
-      <Switch
-        size="$2"
-        checked={checked}
-        onCheckedChange={onToggle}
-        backgroundColor={checked ? '$accentBackground' : '$color5'}
-      >
-        <Switch.Thumb animation="quick" />
-      </Switch>
+      <Toggle checked={checked} onCheckedChange={onToggle} />
     </XStack>
   );
 }

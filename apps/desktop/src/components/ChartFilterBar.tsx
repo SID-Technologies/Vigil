@@ -52,8 +52,8 @@ export function ChartFilterBar({ allTargets, selected, onSetAll, onClear }: Char
       <FilterChip label="Clear" active={false} onPress={onClear} muted />
       <Text fontSize={11} color="$color8" marginLeft="$2">
         {selected.length === 0
-          ? 'showing median across all'
-          : `${selected.length} selected`}
+          ? 'showing the median across all targets'
+          : `${selected.length} target${selected.length === 1 ? '' : 's'} selected`}
       </Text>
     </XStack>
   );

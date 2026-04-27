@@ -22,6 +22,7 @@ use tauri::{
     Emitter, Manager, State,
 };
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::oneshot;
@@ -301,6 +302,7 @@ async fn handle_sidecar_line(app: &tauri::AppHandle, bytes: &[u8]) {
 /// hooks/useMenuEvents.ts) listens and dispatches to the right handler
 /// (navigate, open report modal, etc).
 fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+
     // App submenu — first item, takes the bundle name on macOS automatically.
     let app_about = PredefinedMenuItem::about(app, Some("About Vigil"), None)?;
     let app_settings = MenuItem::with_id(app, "menu:settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
@@ -448,7 +450,7 @@ fn handle_menu_event(app: &tauri::AppHandle, id: &str) {
             }
         }
         "menu:help_github" => {
-            if let Err(e) = app.shell().open("https://github.com/dan-flanagan/Vigil", None) {
+            if let Err(e) = app.opener().open_url("https://github.com/dan-flanagan/Vigil", None::<&str>) {
                 log::warn!("open github failed: {}", e);
             }
         }
@@ -494,8 +496,20 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
 
     TrayIconBuilder::new()
         .menu(&menu)
+        // On macOS the click event is consumed by menu display by default,
+        // BUT only when this is explicitly true. Some Tauri 2.x versions
+        // default to false (left-click does literally nothing if you also
+        // attach an on_tray_icon_event handler). Set explicitly.
+        .show_menu_on_left_click(true)
+        .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
+            // Fallback: synthesize a 1x1 from nothing — should never hit
+            // since tauri.conf.json defines bundle icons. If it does, log.
+            eprintln!("[vigil] no default window icon for tray — icon may not render");
+            tauri::image::Image::new_owned(vec![0; 4], 1, 1)
+        }))
         .tooltip("Vigil — Network Watch")
-        .on_menu_event(|app, event| match event.id.as_ref() {
+        .on_menu_event(|app, event| {
+            match event.id.as_ref() {
             "show" => {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
@@ -508,13 +522,13 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
                 }
             }
             "open_data" => {
-                // Spawn a non-blocking task to open the data folder via the
-                // shell plugin. The shell.open API expects a string path.
+                // Open the data folder via the opener plugin (replaced
+                // tauri-plugin-shell's deprecated open()).
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Ok(dir) = app.path().app_data_dir() {
                         let path_str = dir.to_string_lossy().to_string();
-                        if let Err(e) = app.shell().open(&path_str, None) {
+                        if let Err(e) = app.opener().open_path(&path_str, None::<&str>) {
                             log::warn!("failed to open data folder: {}", e);
                         }
                     }
@@ -535,16 +549,14 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
                 app.exit(0);
             }
             _ => {}
-        })
-        .on_tray_icon_event(|tray, event| {
-            if let tauri::tray::TrayIconEvent::Click { .. } = event {
-                let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
             }
         })
+        // Note: deliberately no on_tray_icon_event handler. macOS convention
+        // for tray-resident utilities (NordPass, 1Password mini, Wi-Fi,
+        // Bluetooth) is "click → show menu, period." The "Show Vigil" item
+        // in the menu is how users open the window. Adding a click→show
+        // handler here would compete with show_menu_on_left_click(true) and
+        // produce jarring double-action behavior.
         .build(app)?;
 
     Ok(())
@@ -558,6 +570,7 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
@@ -575,12 +588,26 @@ pub fn run() {
             }
         }))
         .manage(SidecarState::new())
-        .menu(|handle| build_app_menu(handle))
+        // Menu event handler stays on the builder — it's a global handler
+        // that fires for any installed menu's items.
         .on_menu_event(|app, event| {
             handle_menu_event(app, event.id().0.as_str());
         })
         .setup(|app| {
             let handle = app.handle();
+
+            // Build + install the app menu explicitly. The .menu(closure)
+            // builder method is unreliable in some Tauri 2.x versions on
+            // macOS — explicit set_menu in setup is the canonical pattern.
+            match build_app_menu(handle) {
+                Ok(menu) => {
+                    if let Err(e) = handle.set_menu(menu) {
+                        log::warn!("set_menu failed: {}", e);
+                    }
+                }
+                Err(e) => log::warn!("build_app_menu failed: {}", e),
+            }
+
             build_tray(handle)?;
             if let Err(e) = spawn_sidecar(handle) {
                 log::error!("failed to spawn sidecar: {}", e);

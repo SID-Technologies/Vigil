@@ -5,9 +5,11 @@ import { XStack, YStack, Text } from 'tamagui';
 
 import { Card } from './Card';
 import { Sparkline } from './Sparkline';
+import { TileSkeleton } from './Skeleton';
 import { useColorPalette } from '../hooks/useColorPalette';
 import { useLiveSamples } from '../hooks/useLiveSamples';
 import { useProbeCycle, type ProbeResult } from '../hooks/useProbeCycle';
+import { useTargets } from '../hooks/useTargets';
 
 interface TargetGridProps {
   /** Currently selected target labels (for chart inclusion). */
@@ -38,6 +40,11 @@ export function TargetGrid({ selectedLabels, onToggle }: TargetGridProps) {
   const { states } = useLiveSamples();
   const { getColor } = useColorPalette();
   const navigate = useNavigate();
+  // Use the configured target count to size the skeleton grid — so the
+  // pre-data shell looks like the real layout, not a smaller stand-in.
+  // Includes ephemeral builtins (router_icmp etc.) via useTargets which
+  // returns the persisted set; we add the standard 4 ephemeral lanes too.
+  const targets = useTargets();
 
   const sorted = useMemo(() => {
     if (!latest?.results) return [];
@@ -46,6 +53,10 @@ export function TargetGrid({ selectedLabels, onToggle }: TargetGridProps) {
         kindOrder(a) - kindOrder(b) || a.target.label.localeCompare(b.target.label),
     );
   }, [latest]);
+
+  // Skeleton tile count — fall back to 8 if we don't yet know how many
+  // targets exist. 8 is the typical first-launch shape (4 ephemeral + 4 user).
+  const skeletonCount = (targets.data?.length ?? 4) + 4;
 
   return (
     <Card
@@ -57,11 +68,13 @@ export function TargetGrid({ selectedLabels, onToggle }: TargetGridProps) {
       }
     >
       {sorted.length === 0 ? (
-        <YStack height={120} alignItems="center" justifyContent="center">
-          <Text fontSize={11} color="$color8">
-            Awaiting first cycle…
-          </Text>
-        </YStack>
+        <XStack flexWrap="wrap" gap="$2">
+          {Array.from({ length: skeletonCount }).map((_, i) => (
+            <YStack key={i} width={186}>
+              <TileSkeleton />
+            </YStack>
+          ))}
+        </XStack>
       ) : (
         <XStack flexWrap="wrap" gap="$2">
           {sorted.map((r) => {

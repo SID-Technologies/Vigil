@@ -13,13 +13,16 @@ import {
 import { Button, XStack, YStack, Text } from 'tamagui';
 
 import { Card } from '../components/Card';
+import { ChartTooltip } from '../components/ChartTooltip';
 import { GenerateReportModal } from '../components/GenerateReportModal';
+import { InfoLabel } from '../components/InfoLabel';
 import { PageHeader } from '../components/PageHeader';
+import { ChartSkeleton, TableRowSkeleton } from '../components/Skeleton';
 import { TargetMultiSelect } from '../components/TargetMultiSelect';
 import { TimeRangePicker, defaultRange, type TimeRange } from '../components/TimeRangePicker';
 import { useColorPalette } from '../hooks/useColorPalette';
 import { useSamplesQuery } from '../hooks/useSamplesQuery';
-import { useTargets } from '../hooks/useTargets';
+import { useAllProbeTargets } from '../hooks/useAllProbeTargets';
 import type { AggregatedRow, RawSample } from '../lib/ipc';
 
 /**
@@ -38,7 +41,7 @@ import type { AggregatedRow, RawSample } from '../lib/ipc';
  */
 export function HistoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const targets = useTargets();
+  const allTargets = useAllProbeTargets();
   const { getColor } = useColorPalette();
 
   // Initialize from URL once. Keep selection + range in component state,
@@ -83,7 +86,7 @@ export function HistoryPage() {
     refetchIntervalMs: 60_000,
   });
 
-  const targetsToChart = selected.length > 0 ? selected : (targets.data ?? []).map((t) => t.label);
+  const targetsToChart = selected.length > 0 ? selected : allTargets.map((t) => t.label);
 
   return (
     <YStack flex={1}>
@@ -112,8 +115,8 @@ export function HistoryPage() {
         windowLabel={humanizeRange(rangeMs)}
       />
 
-      <YStack padding="$4" gap="$3" maxWidth={1300} width="100%" alignSelf="center">
-        <Card>
+      <YStack padding="$4" gap="$4" maxWidth={1300} width="100%" alignSelf="center">
+        <Card variant="quiet">
           <YStack gap="$3">
             <XStack gap="$3" alignItems="center" flexWrap="wrap">
               <Text fontSize={11} color="$color10" letterSpacing={0.4} fontWeight="600">
@@ -130,7 +133,7 @@ export function HistoryPage() {
                 TARGETS
               </Text>
               <TargetMultiSelect
-                allTargets={targets.data ?? []}
+                allTargets={allTargets}
                 selected={selected}
                 onToggle={(label) =>
                   setSelected((prev) =>
@@ -147,13 +150,16 @@ export function HistoryPage() {
 
         <Card title={`RTT — ${humanizeRange(rangeMs)}`}>
           {samples.isLoading && !samples.data ? (
-            <ChartEmpty headline="Loading…" detail={`Querying samples from the last ${humanizeRange(rangeMs)}.`} />
+            <ChartSkeleton height={260} />
           ) : samples.isError ? (
-            <ChartEmpty headline="Error" detail="Sample query failed." />
+            <ChartEmpty
+              headline="Couldn't fetch samples"
+              detail="The sidecar may have stopped. Try restarting Vigil from the tray menu."
+            />
           ) : !samples.data || samples.data.rows.length === 0 ? (
             <ChartEmpty
-              headline="No data in this window"
-              detail="Either the sidecar hasn't been running long enough or every probe was disabled. Try a longer window."
+              headline="Nothing recorded for this stretch"
+              detail="Either Vigil hasn't been running long enough, or every probe was disabled. Try a longer window or check the Targets page."
             />
           ) : (
             <HistoryChart
@@ -166,6 +172,15 @@ export function HistoryPage() {
 
         {samples.data ? (
           <SummaryStats data={samples.data} targetsToChart={targetsToChart} />
+        ) : samples.isLoading ? (
+          <Card title="By target">
+            <YStack gap="$1">
+              <TableRowSkeleton columns={6} />
+              <TableRowSkeleton columns={6} />
+              <TableRowSkeleton columns={6} />
+              <TableRowSkeleton columns={6} />
+            </YStack>
+          </Card>
         ) : null}
       </YStack>
     </YStack>
@@ -215,14 +230,8 @@ function HistoryChart({
             width={42}
           />
           <Tooltip
-            contentStyle={{
-              background: 'var(--color2)',
-              border: '1px solid var(--borderColor)',
-              borderRadius: 6,
-              fontSize: 11,
-            }}
-            labelFormatter={fmtTimeLong}
-            formatter={(v: number, name: string) => [`${v.toFixed(2)} ms`, name]}
+            content={<ChartTooltip formatLabel={fmtTimeLong} unit="ms" />}
+            cursor={{ stroke: 'var(--color8)', strokeWidth: 1, strokeDasharray: '3 3' }}
           />
           {targetsToChart.map((label) => (
             <Line
@@ -304,25 +313,40 @@ function SummaryStats({
   return (
     <Card title="Per-target stats">
       <YStack gap="$2">
-        <XStack paddingVertical="$1" paddingHorizontal="$2" gap="$3">
-          <Text flex={2} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-            TARGET
-          </Text>
-          <Text flex={1} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-            UPTIME
-          </Text>
-          <Text flex={1} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-            P50
-          </Text>
-          <Text flex={1} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-            P95
-          </Text>
-          <Text flex={1} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-            P99
-          </Text>
-          <Text flex={1} fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-            COUNT
-          </Text>
+        <XStack paddingVertical="$1" paddingHorizontal="$2" gap="$3" alignItems="center">
+          <YStack flexBasis={0} flexGrow={1} minWidth={200}>
+            <StatHeaderCell>TARGET</StatHeaderCell>
+          </YStack>
+          <YStack width={90}>
+            <InfoLabel
+              label="UPTIME"
+              explain="Percentage of probes that succeeded in this window. 99%+ is healthy; below 95% is a sign of real problems."
+            />
+          </YStack>
+          <YStack width={80}>
+            <InfoLabel
+              label="P50"
+              explain="Median round-trip time. Half of probes were faster than this, half slower. Typical 'how fast does this feel' number."
+            />
+          </YStack>
+          <YStack width={80}>
+            <InfoLabel
+              label="P95"
+              explain="95% of probes were faster than this. The slow tail — what video calls actually feel during congestion."
+            />
+          </YStack>
+          <YStack width={80}>
+            <InfoLabel
+              label="P99"
+              explain="99% of probes were faster. The worst 1% — usually transient spikes. High P99 means inconsistent network."
+            />
+          </YStack>
+          <YStack width={80}>
+            <InfoLabel
+              label="COUNT"
+              explain="Total probes counted in this window."
+            />
+          </YStack>
         </XStack>
         {Array.from(stats.entries())
           .sort((a, b) => a[0].localeCompare(b[0]))
@@ -332,6 +356,8 @@ function SummaryStats({
             const p95 = pct(sorted, 0.95);
             const p99 = pct(sorted, 0.99);
             const uptime = e.count > 0 ? (e.success / e.count) * 100 : 0;
+            const uptimeColor =
+              uptime >= 99.5 ? '$accentBackground' : uptime >= 95 ? '$yellow10' : '$red10';
             return (
               <XStack
                 key={label}
@@ -340,30 +366,51 @@ function SummaryStats({
                 borderRadius="$2"
                 gap="$3"
                 hoverStyle={{ backgroundColor: '$color3' }}
+                alignItems="center"
               >
-                <Text flex={2} fontSize={12} color="$color12" numberOfLines={1}>
-                  {label}
-                </Text>
-                <Text flex={1} fontSize={12} color={uptime >= 99.5 ? '$accentBackground' : uptime >= 95 ? '$yellow10' : '$red10'} fontWeight="600">
-                  {uptime.toFixed(2)}%
-                </Text>
-                <Text flex={1} fontSize={12} color="$color11">
-                  {p50 == null ? '—' : `${p50.toFixed(1)}ms`}
-                </Text>
-                <Text flex={1} fontSize={12} color="$color11">
-                  {p95 == null ? '—' : `${p95.toFixed(1)}ms`}
-                </Text>
-                <Text flex={1} fontSize={12} color="$color11">
-                  {p99 == null ? '—' : `${p99.toFixed(1)}ms`}
-                </Text>
-                <Text flex={1} fontSize={12} color="$color9">
-                  {e.count.toLocaleString()}
-                </Text>
+                <YStack flexBasis={0} flexGrow={1} minWidth={200}>
+                  <Text fontSize={12} color="$color12" numberOfLines={1}>
+                    {label}
+                  </Text>
+                </YStack>
+                <YStack width={90}>
+                  <Text fontSize={12} color={uptimeColor as any} fontWeight="600">
+                    {uptime.toFixed(2)}%
+                  </Text>
+                </YStack>
+                <YStack width={80}>
+                  <Text fontSize={12} color="$color11">
+                    {p50 == null ? '—' : `${p50.toFixed(1)}ms`}
+                  </Text>
+                </YStack>
+                <YStack width={80}>
+                  <Text fontSize={12} color="$color11">
+                    {p95 == null ? '—' : `${p95.toFixed(1)}ms`}
+                  </Text>
+                </YStack>
+                <YStack width={80}>
+                  <Text fontSize={12} color="$color11">
+                    {p99 == null ? '—' : `${p99.toFixed(1)}ms`}
+                  </Text>
+                </YStack>
+                <YStack width={80}>
+                  <Text fontSize={12} color="$color9">
+                    {e.count.toLocaleString()}
+                  </Text>
+                </YStack>
               </XStack>
             );
           })}
       </YStack>
     </Card>
+  );
+}
+
+function StatHeaderCell({ children }: { children: React.ReactNode }) {
+  return (
+    <Text fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600" numberOfLines={1}>
+      {children}
+    </Text>
   );
 }
 

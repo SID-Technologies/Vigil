@@ -23,11 +23,6 @@
         "fullscreen": false
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "tooltip": "Vigil — Network Watch"
-    },
     "security": {
       "csp": null
     }

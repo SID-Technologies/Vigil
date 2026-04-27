@@ -19,6 +19,8 @@
     "@tamagui/native": "2.0.0-rc.36",
     "@repo/configs": "workspace:*",
     "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-opener": "^2.2.0",
     "@tauri-apps/plugin-shell": "^2.2.1",
     "@tauri-apps/plugin-updater": "^2.0.0",
     "@phosphor-icons/react": "^2.1.10",

@@ -11,6 +11,7 @@ import { ThemeProvider, useThemeController } from '@repo/configs/themeController
 import { createTamagui, TamaguiProvider, Theme, XStack, YStack } from 'tamagui';
 
 import { Sidebar } from './components/Sidebar';
+import { WelcomeTour } from './components/WelcomeTour';
 import { useMenuEvents } from './hooks/useMenuEvents';
 import { DashboardPage } from './pages/Dashboard';
 import { HistoryPage } from './pages/History';
@@ -23,9 +24,16 @@ const tamaguiCreatedConfig = createTamagui(tamaguiConfig);
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      // Bumped to 60s so route navigation doesn't re-fetch the same data
+      // immediately on mount. Live components keep their own
+      // refetchInterval, so this only affects background staleness.
+      staleTime: 60_000,
+      // Cache stays around for 10 min after the last subscriber unmounts —
+      // means navigating away from a page and back keeps its data warm.
+      gcTime: 10 * 60_000,
       retry: 1,
       refetchOnWindowFocus: false,
+      refetchOnMount: false,
     },
   },
 });
@@ -52,6 +60,7 @@ function AppContent() {
             </Routes>
           </YStack>
         </XStack>
+        <WelcomeTour />
       </Theme>
     </TamaguiProvider>
   );

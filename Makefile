@@ -59,8 +59,14 @@ vet: ## Run go vet.
 install: ## Install pnpm workspace dependencies.
 	@pnpm install
 
+.PHONY: desktop-kill
+desktop-kill: ## Kill any leftover Vigil dev processes (orphaned tray icons, stuck sidecars).
+	@killall vigil-desktop 2>/dev/null || true
+	@killall vigil-sidecar 2>/dev/null || true
+	@killall Vigil 2>/dev/null || true
+
 .PHONY: desktop-dev
-desktop-dev: build-sidecar ## Build the sidecar then run the Tauri desktop app in development mode.
+desktop-dev: desktop-kill build-sidecar ## Kill leftovers, build the sidecar, then run the Tauri desktop app in dev mode.
 	@cd apps/desktop && pnpm tauri dev
 
 .PHONY: desktop-build
