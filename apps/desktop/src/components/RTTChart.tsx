@@ -16,14 +16,12 @@ import { Card } from './Card';
 import { ChartFilterBar } from './ChartFilterBar';
 import { ChartTooltip } from './ChartTooltip';
 import { PulsingDot } from './PulsingDot';
-import { RefreshIndicator } from './RefreshIndicator';
 import { ChartSkeleton } from './Skeleton';
 import { useColorPalette } from '../hooks/useColorPalette';
-import { useLiveSamples } from '../hooks/useLiveSamples';
-import { useSamplesQuery } from '../hooks/useSamplesQuery';
+import { useLiveProbes } from '../hooks/useLiveSamples';
 import { useAllProbeTargets } from '../hooks/useAllProbeTargets';
+import type { ProbeResult } from '../hooks/useProbeCycle';
 import { fillRawGaps, generateTimeTicks } from '../lib/chartTime';
-import type { RawSample } from '../lib/ipc';
 
 interface RTTChartProps {
   selectedLabels: string[];
@@ -32,37 +30,26 @@ interface RTTChartProps {
 }
 
 /**
- * RTT trend over the last hour.
+ * RTT trend for the dashboard. Reads directly from the in-memory probe
+ * store (lib/probeStore) — no SQLite round-trip — so the chart updates
+ * the moment a probe cycle arrives, matching the per-target tiles.
  *
- *   - 0 selected → median p50 across all targets (current/baseline view).
+ *   - 0 selected → median p50 across all targets (baseline view).
  *   - 1+ selected → one colored line per selected target.
- *
- * Median is the right default because the "is the network ok" question is
- * what the dashboard answers. Per-target lines is the comparative drill-in.
- *
- * Live indicators in the card header (pulsing dot + "updated Xs ago" pill)
- * keep the page feeling alive between the 30s data refetches.
  */
 export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
-  // Dashboard is the "is the network ok right now" surface — 15 min at
-  // raw 2.5s gives ~360 points per target, so a 30-second blip is
-  // visible at the moment it happens. The History page covers longer
-  // windows. Recompute on every render so the window slides forward
-  // with the wall clock; the React Query cache key handles dedup.
+  // 15-min sliding window. Recompute on every render so the X axis tracks
+  // wall-clock; the buffer reference is stable so memoization still works.
   const fromMs = Date.now() - 15 * 60 * 1000;
   const toMs = Date.now();
 
-  const { tick } = useLiveSamples(); // for the live pulse heartbeat
+  const { buffer, version } = useLiveProbes();
   const allTargets = useAllProbeTargets();
-  const samples = useSamplesQuery({
-    fromMs,
-    toMs,
-    granularity: 'raw',
-    targetLabels: selectedLabels.length > 0 ? selectedLabels : undefined,
-  });
   const { getColor } = useColorPalette();
 
-  const rows = samples.data && samples.data.granularity === 'raw' ? samples.data.rows : [];
+  // Flatten the per-target buffer to a single ProbeResult[] for the
+  // existing rollup/pivot helpers. Filter to the active target set.
+  const rows = useMemo(() => projectBuffer(buffer, selectedLabels, fromMs), [buffer, selectedLabels, fromMs, version]);
 
   const data = useMemo(() => {
     if (selectedLabels.length === 0) {
@@ -73,10 +60,10 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
 
   const xTicks = useMemo(() => generateTimeTicks(fromMs, toMs, 5), [fromMs, toMs]);
 
+  const tick = version;
   const isEmpty = data.length === 0;
-  const isLoading = samples.isLoading && rows.length === 0;
-  const isError = samples.isError;
-  const lastUpdated = samples.dataUpdatedAt ? new Date(samples.dataUpdatedAt) : undefined;
+  const isLoading = buffer.size === 0;
+  const isError = false;
 
   return (
     <Card
@@ -85,11 +72,6 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
         <XStack gap="$2" alignItems="center">
           <PulsingDot color="var(--accentColor)" size={8} pulseKey={tick} />
           <Text fontSize={11} color="$color8">live</Text>
-          <RefreshIndicator
-            lastUpdated={lastUpdated}
-            isFetching={samples.isFetching}
-            onRefresh={() => samples.refetch()}
-          />
         </XStack>
       }
     >
@@ -102,15 +84,10 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
 
       {isLoading ? (
         <ChartSkeleton />
-      ) : isError ? (
-        <ChartEmptyState
-          headline="Couldn't fetch samples"
-          detail="The sidecar may have stopped. Try restarting Vigil from the tray menu."
-        />
       ) : isEmpty ? (
         <ChartEmptyState
-          headline="Nothing yet"
-          detail="Vigil's first 5-minute summary lands about 6 minutes after start. Until then, you'll see live data on the tiles below."
+          headline="Settling in"
+          detail="The first probe cycle runs in just a couple of seconds — the chart fills as cycles arrive."
         />
       ) : selectedLabels.length === 0 ? (
         <MedianAreaChart
@@ -286,19 +263,33 @@ function ChartEmptyState({ headline, detail }: { headline: string; detail: strin
 // Data shaping
 // ============================================================================
 
-/**
- * Group raw probes by their (already-very-near) timestamp and take the
- * median RTT across reachable targets per cycle. Each `probe:cycle` event
- * fires every ~2.5s and contains one probe per target — the timestamps
- * within a cycle are within milliseconds of each other, so we round to
- * the nearest probe-cadence bucket so concurrent probes group cleanly.
- */
-function rollupMedianRaw(rows: RawSample[]): MedianPoint[] {
+// projectBuffer flattens the per-target store buffer to a time-window-
+// scoped slice. The store mutates the buffer in place; callers depend on
+// `version` for memo invalidation, not on buffer reference identity.
+function projectBuffer(
+  buffer: Map<string, ProbeResult[]>,
+  selectedLabels: string[],
+  fromMs: number,
+): ProbeResult[] {
+  const out: ProbeResult[] = [];
+  const filterByLabel = selectedLabels.length > 0;
+  const allowed = filterByLabel ? new Set(selectedLabels) : null;
+  for (const [label, results] of buffer.entries()) {
+    if (allowed && !allowed.has(label)) continue;
+    for (const r of results) {
+      if (r.ts_unix_ms >= fromMs) out.push(r);
+    }
+  }
+  return out;
+}
+
+// Group probes by their (already-very-near) timestamp and take the median
+// RTT across reachable targets per cycle. Each cycle's probes span tens of
+// ms, so round to the nearest second to group them cleanly.
+function rollupMedianRaw(rows: ProbeResult[]): MedianPoint[] {
   const byCycle = new Map<number, number[]>();
   for (const r of rows) {
     if (!r.success || r.rtt_ms == null) continue;
-    // Round to the nearest second so a 13-target cycle's probes (which
-    // span tens of ms) land in the same group.
     const t = Math.round(r.ts_unix_ms / 1000) * 1000;
     const arr = byCycle.get(t) ?? [];
     arr.push(r.rtt_ms);
@@ -309,13 +300,13 @@ function rollupMedianRaw(rows: RawSample[]): MedianPoint[] {
     .map((t) => ({ ts: t, medianP50: median(byCycle.get(t)!) }));
 }
 
-function pivotRaw(rows: RawSample[], selectedLabels: string[]): PivotPoint[] {
+function pivotRaw(rows: ProbeResult[], selectedLabels: string[]): PivotPoint[] {
   const allowed = new Set(selectedLabels);
   const byTs = new Map<number, PivotPoint>();
   for (const r of rows) {
-    if (!allowed.has(r.target_label) || !r.success || r.rtt_ms == null) continue;
+    if (!allowed.has(r.target.label) || !r.success || r.rtt_ms == null) continue;
     const existing = byTs.get(r.ts_unix_ms) ?? { ts: r.ts_unix_ms };
-    existing[r.target_label] = r.rtt_ms;
+    existing[r.target.label] = r.rtt_ms;
     byTs.set(r.ts_unix_ms, existing);
   }
   return Array.from(byTs.values()).sort((a, b) => a.ts - b.ts);

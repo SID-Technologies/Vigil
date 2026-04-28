@@ -19,8 +19,13 @@
 import { onSidecarEvent } from './events';
 import type { ProbeCycleEvent, ProbeResult } from '../hooks/useProbeCycle';
 
-/** Rolling-buffer window for live samples. 5 min ≈ 120 probes per target at default cadence. */
-export const LIVE_WINDOW_MS = 5 * 60 * 1000;
+/**
+ * Rolling-buffer window for live samples. 15 min covers the dashboard's
+ * RTT chart window directly from memory — no DB round-trip, so the chart
+ * updates the instant a probe cycle arrives. ~360 probes/target at the
+ * default 2.5s cadence; ~13 targets × 360 ≈ 5k results, ~700KB. Negligible.
+ */
+export const LIVE_WINDOW_MS = 15 * 60 * 1000;
 
 let version = 0;
 let count = 0;

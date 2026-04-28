@@ -74,6 +74,27 @@ export function getLiveState(
   return states.get(label) ?? EMPTY_STATE;
 }
 
+/**
+ * Raw access to the probe store's per-target buffer. Used by the
+ * dashboard's RTT chart, which needs every probe — not just the
+ * tile-summary fields — and wants to update on every cycle without a
+ * DB round-trip. Returns the buffer reference (stable; the store mutates
+ * in place) plus a version that bumps on each cycle, so callers can
+ * `useMemo` against it.
+ */
+export function useLiveProbes(): {
+  buffer: Map<string, ProbeResult[]>;
+  version: number;
+} {
+  const version = useSyncExternalStore(
+    subscribeProbeStore,
+    getProbeStoreVersion,
+    getProbeStoreVersion,
+  );
+
+  return { buffer: getProbeBuffer(), version };
+}
+
 function summarize(results: ProbeResult[]): LiveTargetState {
   if (results.length === 0) return EMPTY_STATE;
   let successes = 0;
