@@ -151,7 +151,11 @@
       "Bash(echo \"TOTAL=$\\(grep -cE '\\\\\\([a-z]+\\\\\\)$' /tmp/finalLint.out\\)\")",
       "Bash(xargs sed *)",
       "Bash(echo \"FINAL=$\\(grep -cE '\\\\\\([a-z]+\\\\\\)$' /tmp/done.out\\)\")",
-      "Bash(echo \"TOTAL=$\\(grep -cE '\\\\\\([a-z]+\\\\\\)$' /tmp/done2.out\\)\")"
+      "Bash(echo \"TOTAL=$\\(grep -cE '\\\\\\([a-z]+\\\\\\)$' /tmp/done2.out\\)\")",
+      "Bash(echo \"linux-build=$?\")",
+      "Bash(echo \"linux-lint=$?\")",
+      "Bash(echo \"darwin-build=$?\")",
+      "Bash(echo \"darwin-lint=$?\")"
     ]
   }
 }

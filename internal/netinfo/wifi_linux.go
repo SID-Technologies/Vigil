@@ -4,7 +4,6 @@ package netinfo
 
 import (
 	"context"
-	"net"
 	"strconv"
 	"time"
 
@@ -24,7 +23,8 @@ func SampleWifi(_ context.Context) WifiSample {
 	if err != nil {
 		return sample
 	}
-	defer c.Close()
+
+	defer func() { _ = c.Close() }()
 
 	ifaces, err := c.Interfaces()
 	if err != nil {
@@ -36,6 +36,7 @@ func SampleWifi(_ context.Context) WifiSample {
 		if iface.Type == wifi.InterfaceTypeMonitor {
 			continue
 		}
+
 		bss, err := c.BSS(iface)
 		if err != nil || bss == nil {
 			continue
@@ -44,26 +45,33 @@ func SampleWifi(_ context.Context) WifiSample {
 		if bss.SSID != "" {
 			sample.SSID = strPtr(bss.SSID)
 		}
-		if bss.BSSID != nil && len(bss.BSSID) > 0 {
-			sample.BSSID = strPtr(net.HardwareAddr(bss.BSSID).String())
+
+		if len(bss.BSSID) > 0 {
+			sample.BSSID = strPtr(bss.BSSID.String())
 		}
-		// mdlayher/wifi doesn't expose RSSI directly via the BSS struct;
-		// use StationInfo for the connected interface to get signal.
-		if stations, err := c.StationInfo(iface); err == nil {
+
+		// mdlayher/wifi doesn't expose RSSI via the BSS struct; ask
+		// StationInfo on the connected interface for signal strength.
+		stations, err := c.StationInfo(iface)
+		if err == nil {
 			for _, s := range stations {
 				if s.Signal != 0 {
 					sample.RSSIDbm = intPtr(s.Signal)
+
 					break
 				}
 			}
 		}
+
 		// Channel is encoded in BSS.Frequency (MHz). Round-trip to channel
-		// number is a piecewise function — skip the math, just store MHz.
+		// number is a piecewise function — skip the math, store MHz.
 		if bss.Frequency != 0 {
 			ch := strconv.Itoa(bss.Frequency) + " MHz"
 			sample.Channel = strPtr(ch)
 		}
+
 		break
 	}
+
 	return sample
 }
