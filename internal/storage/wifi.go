@@ -9,7 +9,7 @@ import (
 
 // WifiSample is the storage-layer view of a Wi-Fi sample.
 type WifiSample struct {
-	TsUnixMs      int64    `json:"ts_unix_ms"`
+	TSUnixMs      int64    `json:"ts_unix_ms"`
 	SSID          *string  `json:"ssid,omitempty"`
 	BSSID         *string  `json:"bssid,omitempty"`
 	SignalPercent *int     `json:"signal_percent,omitempty"`
@@ -31,34 +31,42 @@ func QueryWifiSamples(ctx context.Context, client *ent.Client, fromMs, toMs int6
 		Order(ent.Asc(wifisample.FieldTsUnixMs)).
 		All(ctx)
 	if err != nil {
-		return nil, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
 	}
 
 	out := make([]WifiSample, 0, len(rows))
 	for _, r := range rows {
-		w := WifiSample{TsUnixMs: r.TsUnixMs}
+		w := WifiSample{TSUnixMs: r.TsUnixMs}
 		if r.Ssid != nil {
 			w.SSID = r.Ssid
 		}
+
 		if r.Bssid != nil {
 			w.BSSID = r.Bssid
 		}
+
 		if r.SignalPercent != nil {
 			w.SignalPercent = r.SignalPercent
 		}
+
 		if r.RssiDbm != nil {
 			w.RSSIDbm = r.RssiDbm
 		}
+
 		if r.RxRateMbps != nil {
 			w.RxRateMbps = r.RxRateMbps
 		}
+
 		if r.TxRateMbps != nil {
 			w.TxRateMbps = r.TxRateMbps
 		}
+
 		if r.Channel != nil {
 			w.Channel = r.Channel
 		}
+
 		out = append(out, w)
 	}
+
 	return out, nil
 }

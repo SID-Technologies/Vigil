@@ -14,23 +14,28 @@ package reports
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/internal/storage"
+	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
 // Format names accepted by the generator. Combine with bitwise OR.
 type Format int
 
+// Format flags, OR'd together to select report outputs.
 const (
-	FormatCSV  Format = 1 << iota
+	FormatCSV Format = 1 << iota
 	FormatJSON
 	FormatHTML
 )
+
+// outDirPerm is the permission applied to the user-chosen output directory.
+// 0o750 keeps "group-readable, world-blind" — tighter than the default 0o755.
+const outDirPerm = 0o750
 
 // GenerateParams configures one report run.
 type GenerateParams struct {
@@ -55,22 +60,25 @@ type Result struct {
 // already written, we keep them and surface a non-fatal error message.
 func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result, error) {
 	if p.OutDir == "" {
-		return Result{}, fmt.Errorf("out_dir is required")
-	}
-	if p.FromMs == 0 || p.ToMs == 0 || p.ToMs <= p.FromMs {
-		return Result{}, fmt.Errorf("invalid time window")
-	}
-	if p.Formats == 0 {
-		return Result{}, fmt.Errorf("at least one format must be selected")
+		return Result{}, errors.New("out_dir is required")
 	}
 
-	if err := os.MkdirAll(p.OutDir, 0o755); err != nil {
-		return Result{}, fmt.Errorf("create out dir: %w", err)
+	if p.FromMs == 0 || p.ToMs == 0 || p.ToMs <= p.FromMs {
+		return Result{}, errors.New("invalid time window")
+	}
+
+	if p.Formats == 0 {
+		return Result{}, errors.New("at least one format must be selected")
+	}
+
+	err := os.MkdirAll(p.OutDir, outDirPerm)
+	if err != nil {
+		return Result{}, errors.Wrap(err, "create out dir")
 	}
 
 	base := p.BaseName
 	if base == "" {
-		base = fmt.Sprintf("vigil-report-%s", time.Now().Format("2006-01-02T15-04"))
+		base = "vigil-report-" + time.Now().Format("2006-01-02T15-04")
 	}
 
 	// Reports always pull RAW samples. They're meant for the "show the ISP
@@ -84,12 +92,12 @@ func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result
 		Limit:        1_000_000,
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("load samples: %w", err)
+		return Result{}, errors.Wrap(err, "load samples")
 	}
 
 	wifi, err := storage.QueryWifiSamples(ctx, client, p.FromMs, p.ToMs)
 	if err != nil {
-		return Result{}, fmt.Errorf("load wifi samples: %w", err)
+		return Result{}, errors.Wrap(err, "load wifi samples")
 	}
 
 	outages, err := storage.QueryOutages(ctx, client, storage.QueryOutagesParams{
@@ -97,31 +105,43 @@ func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result
 		ToMs:   p.ToMs,
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("load outages: %w", err)
+		return Result{}, errors.Wrap(err, "load outages")
 	}
 
 	rep := buildReport(p.FromMs, p.ToMs, samples, wifi, outages)
 
 	var paths []string
+
 	if p.Formats&FormatCSV != 0 {
 		path := filepath.Join(p.OutDir, base+".csv")
-		if err := writeCSV(path, samples); err != nil {
-			return Result{Paths: paths}, fmt.Errorf("csv: %w", err)
+
+		err := writeCSV(path, samples)
+		if err != nil {
+			return Result{Paths: paths}, errors.Wrap(err, "csv")
 		}
+
 		paths = append(paths, path)
 	}
+
 	if p.Formats&FormatJSON != 0 {
 		path := filepath.Join(p.OutDir, base+".json")
-		if err := writeJSON(path, rep); err != nil {
-			return Result{Paths: paths}, fmt.Errorf("json: %w", err)
+
+		err := writeJSON(path, rep)
+		if err != nil {
+			return Result{Paths: paths}, errors.Wrap(err, "json")
 		}
+
 		paths = append(paths, path)
 	}
+
 	if p.Formats&FormatHTML != 0 {
 		path := filepath.Join(p.OutDir, base+".html")
-		if err := writeHTML(path, rep); err != nil {
-			return Result{Paths: paths}, fmt.Errorf("html: %w", err)
+
+		err := writeHTML(path, rep)
+		if err != nil {
+			return Result{Paths: paths}, errors.Wrap(err, "html")
 		}
+
 		paths = append(paths, path)
 	}
 
@@ -130,14 +150,21 @@ func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result
 
 // writeJSON serializes the structured report payload (summary + raw samples
 // + outages + wifi). Pretty-printed for human inspection.
-func writeJSON(path string, rep *report) error {
-	f, err := os.Create(path)
+func writeJSON(path string, rep *report) (err error) {
+	f, err := os.Create(path) //nolint:gosec // path supplied by user via report export UI
 	if err != nil {
-		return err //nolint:wrapcheck
+		return err //nolint:wrapcheck // wrapped by caller in Generate
 	}
-	defer f.Close()
+
+	defer func() {
+		cerr := f.Close()
+		if err == nil && cerr != nil {
+			err = cerr
+		}
+	}()
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	return enc.Encode(rep) //nolint:wrapcheck
+
+	return enc.Encode(rep) //nolint:wrapcheck // wrapped by caller in Generate
 }

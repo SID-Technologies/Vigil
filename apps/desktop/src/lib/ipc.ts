@@ -91,7 +91,7 @@ export const targetsDelete = (id: string) =>
 
 // ---------- Samples ----------
 
-export type Granularity = 'auto' | 'raw' | '5min' | '1h';
+export type Granularity = 'auto' | 'raw' | '1min' | '5min' | '1h';
 
 export interface RawSample {
   ts_unix_ms: number;
@@ -123,6 +123,7 @@ export interface AggregatedRow {
 // switch on this to pick the right field names.
 export type SamplesQueryResult =
   | { granularity: 'raw'; rows: RawSample[] }
+  | { granularity: '1min'; rows: AggregatedRow[] }
   | { granularity: '5min'; rows: AggregatedRow[] }
   | { granularity: '1h'; rows: AggregatedRow[] };
 
@@ -175,6 +176,7 @@ export interface AppConfig {
   flush_interval_sec: number;
   ping_timeout_ms: number;
   retention_raw_days: number;
+  retention_1min_days: number;
   retention_5min_days: number;
   wifi_sample_enabled: boolean;
 }

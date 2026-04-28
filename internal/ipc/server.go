@@ -47,7 +47,7 @@ func (s *Server) Register(method string, handler Handler) {
 	s.handlers[method] = handler
 }
 
-// Run blocks reading from `in` until ctx is cancelled or the input stream
+// Run blocks reading from `in` until ctx is canceled or the input stream
 // closes (e.g. parent Tauri shell exits). Each request is dispatched on a
 // goroutine so a slow handler can't block subsequent requests.
 //
@@ -57,6 +57,7 @@ func (s *Server) Run(ctx context.Context) error {
 	// IPC payloads can be larger than the default 64K (e.g. samples.query
 	// returning a few thousand rows). Bump the buffer ceiling.
 	const maxIPCLine = 8 * 1024 * 1024
+
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, maxIPCLine)
 
@@ -79,15 +80,27 @@ func (s *Server) Run(ctx context.Context) error {
 		go s.dispatch(ctx, payload)
 	}
 
-	if err := scanner.Err(); err != nil {
+	err := scanner.Err()
+	if err != nil {
 		return errors.Wrap(err, "ipc scanner error")
 	}
+
 	return nil
+}
+
+// Emit sends an unsolicited event to the Tauri shell. Safe to call from any
+// goroutine. Errors writing to stdout are logged but not surfaced — if the
+// Tauri shell has gone away, the next read in Run() will return EOF and the
+// sidecar will shut down on its own.
+func (s *Server) Emit(event string, data any) {
+	s.write(Event{Event: event, Data: data})
 }
 
 func (s *Server) dispatch(ctx context.Context, payload []byte) {
 	var req Request
-	if err := json.Unmarshal(payload, &req); err != nil {
+
+	err := json.Unmarshal(payload, &req)
+	if err != nil {
 		log.Warn().Err(err).Msg("ipc: malformed request, dropping")
 		return
 	}
@@ -101,6 +114,7 @@ func (s *Server) dispatch(ctx context.Context, payload []byte) {
 				Message: "unknown method: " + req.Method,
 			},
 		})
+
 		return
 	}
 
@@ -109,19 +123,12 @@ func (s *Server) dispatch(ctx context.Context, payload []byte) {
 		s.writeResponse(Response{ID: req.ID, Error: ipcErr})
 		return
 	}
+
 	s.writeResponse(Response{ID: req.ID, Result: result})
 }
 
 func (s *Server) writeResponse(resp Response) {
 	s.write(resp)
-}
-
-// Emit sends an unsolicited event to the Tauri shell. Safe to call from any
-// goroutine. Errors writing to stdout are logged but not surfaced — if the
-// Tauri shell has gone away, the next read in Run() will return EOF and the
-// sidecar will shut down on its own.
-func (s *Server) Emit(event string, data any) {
-	s.write(Event{Event: event, Data: data})
 }
 
 func (s *Server) write(v any) {
@@ -134,11 +141,14 @@ func (s *Server) write(v any) {
 	s.outMu.Lock()
 	defer s.outMu.Unlock()
 
-	if _, err := s.out.Write(encoded); err != nil {
+	_, err = s.out.Write(encoded)
+	if err != nil {
 		log.Error().Err(err).Msg("ipc: write failed")
 		return
 	}
-	if _, err := s.out.Write([]byte{'\n'}); err != nil {
+
+	_, err = s.out.Write([]byte{'\n'})
+	if err != nil {
 		log.Error().Err(err).Msg("ipc: write newline failed")
 	}
 }

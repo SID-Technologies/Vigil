@@ -1,9 +1,5 @@
 // Package buildinfo exposes the binary's version, git commit, and build
 // timestamp from runtime/debug.BuildInfo.
-//
-// Adapted from sid-technologies/pugio. Prometheus metrics intentionally
-// stripped — the Vigil sidecar is a desktop-resident process, not a Cloud Run
-// service, so /metrics has no consumer.
 package buildinfo
 
 import (
@@ -16,7 +12,13 @@ import (
 // For dev builds it stays "main".
 var version = "main"
 
-const unknown = "unknown"
+const (
+	unknown = "unknown"
+
+	// shortCommitHashLen matches the conventional 7-char short SHA used by
+	// `git log --oneline` and GitHub's commit URLs.
+	shortCommitHashLen = 7
+)
 
 // Version returns the binary version (git tag for releases, "main" for dev).
 func Version() string {
@@ -39,13 +41,14 @@ func GitCommit() (string, bool) {
 	if commit == unknown {
 		return "", false
 	}
+
 	return commit, true
 }
 
 // get returns the git commit hash and timestamp from runtime build info.
-func get() (string, string) {
-	hash, timestamp := unknown, unknown
-	hashLen := 7
+func get() (hash, timestamp string) { //nolint:nonamedreturns // revive's confusing-results wants named returns for same-type tuples
+	hash, timestamp = unknown, unknown
+	hashLen := shortCommitHashLen
 
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -58,9 +61,12 @@ func get() (string, string) {
 			if len(s.Value) < hashLen {
 				hashLen = len(s.Value)
 			}
+
 			hash = s.Value[:hashLen]
 		case "vcs.time":
 			timestamp = s.Value
+		default:
+			// other vcs.* keys (e.g. vcs.modified) are intentionally ignored
 		}
 	}
 

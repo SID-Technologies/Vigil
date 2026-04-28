@@ -18,6 +18,9 @@ type Sample func(*sql.Selector)
 // Sample1h is the predicate function for sample1h builders.
 type Sample1h func(*sql.Selector)
 
+// Sample1min is the predicate function for sample1min builders.
+type Sample1min func(*sql.Selector)
+
 // Sample5min is the predicate function for sample5min builders.
 type Sample5min func(*sql.Selector)
 

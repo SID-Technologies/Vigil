@@ -27,11 +27,10 @@ type WifiSample struct {
 // strPtr / intPtr / f64Ptr — convenience helpers for the per-platform
 // implementations to avoid `x := "foo"; sample.SSID = &x` boilerplate.
 //
-//nolint:unused // each helper is referenced from at least one platform file
+
 func strPtr(s string) *string { return &s }
 
-//nolint:unused
 func intPtr(i int) *int { return &i }
 
-//nolint:unused
+//nolint:unused // used by platform-specific wifi_*.go files via build tags
 func f64Ptr(f float64) *float64 { return &f }

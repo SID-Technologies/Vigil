@@ -18,6 +18,7 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/outage"
 	"github.com/sid-technologies/vigil/db/ent/sample"
 	"github.com/sid-technologies/vigil/db/ent/sample1h"
+	"github.com/sid-technologies/vigil/db/ent/sample1min"
 	"github.com/sid-technologies/vigil/db/ent/sample5min"
 	"github.com/sid-technologies/vigil/db/ent/target"
 	"github.com/sid-technologies/vigil/db/ent/wifisample"
@@ -36,6 +37,8 @@ type Client struct {
 	Sample *SampleClient
 	// Sample1h is the client for interacting with the Sample1h builders.
 	Sample1h *Sample1hClient
+	// Sample1min is the client for interacting with the Sample1min builders.
+	Sample1min *Sample1minClient
 	// Sample5min is the client for interacting with the Sample5min builders.
 	Sample5min *Sample5minClient
 	// Target is the client for interacting with the Target builders.
@@ -57,6 +60,7 @@ func (c *Client) init() {
 	c.Outage = NewOutageClient(c.config)
 	c.Sample = NewSampleClient(c.config)
 	c.Sample1h = NewSample1hClient(c.config)
+	c.Sample1min = NewSample1minClient(c.config)
 	c.Sample5min = NewSample5minClient(c.config)
 	c.Target = NewTargetClient(c.config)
 	c.WifiSample = NewWifiSampleClient(c.config)
@@ -156,6 +160,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Outage:     NewOutageClient(cfg),
 		Sample:     NewSampleClient(cfg),
 		Sample1h:   NewSample1hClient(cfg),
+		Sample1min: NewSample1minClient(cfg),
 		Sample5min: NewSample5minClient(cfg),
 		Target:     NewTargetClient(cfg),
 		WifiSample: NewWifiSampleClient(cfg),
@@ -182,6 +187,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Outage:     NewOutageClient(cfg),
 		Sample:     NewSampleClient(cfg),
 		Sample1h:   NewSample1hClient(cfg),
+		Sample1min: NewSample1minClient(cfg),
 		Sample5min: NewSample5minClient(cfg),
 		Target:     NewTargetClient(cfg),
 		WifiSample: NewWifiSampleClient(cfg),
@@ -214,8 +220,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AppConfig, c.Outage, c.Sample, c.Sample1h, c.Sample5min, c.Target,
-		c.WifiSample,
+		c.AppConfig, c.Outage, c.Sample, c.Sample1h, c.Sample1min, c.Sample5min,
+		c.Target, c.WifiSample,
 	} {
 		n.Use(hooks...)
 	}
@@ -225,8 +231,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AppConfig, c.Outage, c.Sample, c.Sample1h, c.Sample5min, c.Target,
-		c.WifiSample,
+		c.AppConfig, c.Outage, c.Sample, c.Sample1h, c.Sample1min, c.Sample5min,
+		c.Target, c.WifiSample,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -243,6 +249,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Sample.mutate(ctx, m)
 	case *Sample1hMutation:
 		return c.Sample1h.mutate(ctx, m)
+	case *Sample1minMutation:
+		return c.Sample1min.mutate(ctx, m)
 	case *Sample5minMutation:
 		return c.Sample5min.mutate(ctx, m)
 	case *TargetMutation:
@@ -786,6 +794,139 @@ func (c *Sample1hClient) mutate(ctx context.Context, m *Sample1hMutation) (Value
 	}
 }
 
+// Sample1minClient is a client for the Sample1min schema.
+type Sample1minClient struct {
+	config
+}
+
+// NewSample1minClient returns a client for the Sample1min from the given config.
+func NewSample1minClient(c config) *Sample1minClient {
+	return &Sample1minClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sample1min.Hooks(f(g(h())))`.
+func (c *Sample1minClient) Use(hooks ...Hook) {
+	c.hooks.Sample1min = append(c.hooks.Sample1min, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sample1min.Intercept(f(g(h())))`.
+func (c *Sample1minClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Sample1min = append(c.inters.Sample1min, interceptors...)
+}
+
+// Create returns a builder for creating a Sample1min entity.
+func (c *Sample1minClient) Create() *Sample1minCreate {
+	mutation := newSample1minMutation(c.config, OpCreate)
+	return &Sample1minCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Sample1min entities.
+func (c *Sample1minClient) CreateBulk(builders ...*Sample1minCreate) *Sample1minCreateBulk {
+	return &Sample1minCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *Sample1minClient) MapCreateBulk(slice any, setFunc func(*Sample1minCreate, int)) *Sample1minCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &Sample1minCreateBulk{err: fmt.Errorf("calling to Sample1minClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*Sample1minCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &Sample1minCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Sample1min.
+func (c *Sample1minClient) Update() *Sample1minUpdate {
+	mutation := newSample1minMutation(c.config, OpUpdate)
+	return &Sample1minUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *Sample1minClient) UpdateOne(_m *Sample1min) *Sample1minUpdateOne {
+	mutation := newSample1minMutation(c.config, OpUpdateOne, withSample1min(_m))
+	return &Sample1minUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *Sample1minClient) UpdateOneID(id int) *Sample1minUpdateOne {
+	mutation := newSample1minMutation(c.config, OpUpdateOne, withSample1minID(id))
+	return &Sample1minUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Sample1min.
+func (c *Sample1minClient) Delete() *Sample1minDelete {
+	mutation := newSample1minMutation(c.config, OpDelete)
+	return &Sample1minDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *Sample1minClient) DeleteOne(_m *Sample1min) *Sample1minDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *Sample1minClient) DeleteOneID(id int) *Sample1minDeleteOne {
+	builder := c.Delete().Where(sample1min.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &Sample1minDeleteOne{builder}
+}
+
+// Query returns a query builder for Sample1min.
+func (c *Sample1minClient) Query() *Sample1minQuery {
+	return &Sample1minQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSample1min},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Sample1min entity by its id.
+func (c *Sample1minClient) Get(ctx context.Context, id int) (*Sample1min, error) {
+	return c.Query().Where(sample1min.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *Sample1minClient) GetX(ctx context.Context, id int) *Sample1min {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *Sample1minClient) Hooks() []Hook {
+	return c.hooks.Sample1min
+}
+
+// Interceptors returns the client interceptors.
+func (c *Sample1minClient) Interceptors() []Interceptor {
+	return c.inters.Sample1min
+}
+
+func (c *Sample1minClient) mutate(ctx context.Context, m *Sample1minMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&Sample1minCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&Sample1minUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&Sample1minUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&Sample1minDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Sample1min mutation op: %q", m.Op())
+	}
+}
+
 // Sample5minClient is a client for the Sample5min schema.
 type Sample5minClient struct {
 	config
@@ -1188,10 +1329,11 @@ func (c *WifiSampleClient) mutate(ctx context.Context, m *WifiSampleMutation) (V
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AppConfig, Outage, Sample, Sample1h, Sample5min, Target, WifiSample []ent.Hook
+		AppConfig, Outage, Sample, Sample1h, Sample1min, Sample5min, Target,
+		WifiSample []ent.Hook
 	}
 	inters struct {
-		AppConfig, Outage, Sample, Sample1h, Sample5min, Target,
+		AppConfig, Outage, Sample, Sample1h, Sample1min, Sample5min, Target,
 		WifiSample []ent.Interceptor
 	}
 )

@@ -26,7 +26,7 @@ func New(msg string, attrs ...any) error {
 // Wrap returns a new error wrapping the provided with additional
 // structured fields.
 //
-//nolint:wrapcheck,inamedparam // This function does custom wrapping and errors.
+//nolint:inamedparam // attrs... is variadic; named return is intentional.
 func Wrap(err error, msg string, attrs ...any) error {
 	if err == nil {
 		panic("wrap nil error")

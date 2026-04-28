@@ -11,7 +11,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"os"
 	"os/signal"
@@ -29,6 +28,7 @@ import (
 	"github.com/sid-technologies/vigil/internal/retention"
 	"github.com/sid-technologies/vigil/internal/storage"
 	"github.com/sid-technologies/vigil/pkg/buildinfo"
+	"github.com/sid-technologies/vigil/pkg/errors"
 	vlog "github.com/sid-technologies/vigil/pkg/log"
 )
 
@@ -36,7 +36,8 @@ import (
 func Run() int {
 	dataDir := flag.String("data-dir", "", "Directory for SQLite DB, logs, and cached settings (required)")
 	devMode := flag.Bool("dev", false, "Log to stderr instead of <data-dir>/vigil.log (for `go run`)")
-	flag.Parse()
+
+	flag.Parse() //nolint:revive // app.Run is the sidecar's effective main; cmd/vigil-sidecar just delegates here
 
 	if *devMode {
 		vlog.InitializeLoggerStderr()
@@ -47,7 +48,9 @@ func Run() int {
 			_, _ = os.Stderr.WriteString("vigil-sidecar: --data-dir is required (or pass --dev)\n")
 			return 2
 		}
-		if _, err := vlog.InitializeLogger(*dataDir); err != nil {
+
+		_, err := vlog.InitializeLogger(*dataDir)
+		if err != nil {
 			_, _ = os.Stderr.WriteString("vigil-sidecar: log init failed: " + err.Error() + "\n")
 			return 1
 		}
@@ -62,6 +65,7 @@ func Run() int {
 	// SIGTERM/SIGINT — graceful shutdown.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+
 	go func() {
 		<-sigCh
 		log.Info().Msg("signal received, shutting down")
@@ -77,13 +81,17 @@ func Run() int {
 		log.Error().Err(err).Msg("failed to open database")
 		return 1
 	}
+
 	defer func() { _ = client.Close() }()
 
-	if err := storage.SeedDefaultTargets(ctx, client); err != nil {
+	err = storage.SeedDefaultTargets(ctx, client)
+	if err != nil {
 		log.Error().Err(err).Msg("failed to seed default targets")
 		return 1
 	}
-	if err := storage.SeedAppConfig(ctx, client); err != nil {
+
+	err = storage.SeedAppConfig(ctx, client)
+	if err != nil {
 		log.Error().Err(err).Msg("failed to seed app_config")
 		return 1
 	}
@@ -100,6 +108,7 @@ func Run() int {
 		log.Error().Err(err).Msg("failed to load enabled probes")
 		return 1
 	}
+
 	mon := monitor.New(client, monitor.Config{
 		PingIntervalSec:   cfg.PingIntervalSec,
 		FlushIntervalSec:  cfg.FlushIntervalSec,
@@ -158,36 +167,36 @@ func Run() int {
 	// Run all four background workers + IPC server. wg ensures we don't return
 	// (and trigger client.Close via defer) until everyone has stopped.
 	var wg sync.WaitGroup
-	wg.Add(4)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		mon.Run(ctx)
-	}()
-	go func() {
-		defer wg.Done()
+	})
+
+	wg.Go(func() {
 		agg.Run(ctx)
-	}()
-	go func() {
-		defer wg.Done()
+	})
+
+	wg.Go(func() {
 		pruner.Run(ctx)
-	}()
-	go func() {
-		defer wg.Done()
-		if err := srv.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+	})
+
+	wg.Go(func() {
+		err := srv.Run(ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Error().Err(err).Msg("ipc server stopped with error")
 			cancel()
 		}
-	}()
+	})
 
 	wg.Wait()
 	log.Info().Msg("vigil sidecar exited cleanly")
+
 	return 0
 }
 
 // watchParent polls the parent PID. When the parent (Tauri shell) dies, this
 // process is reparented to PID 1 (or the equivalent on Windows). Detecting
-// that and cancelling ctx ensures the sidecar doesn't outlive its host as a
+// that and canceling ctx ensures the sidecar doesn't outlive its host as a
 // zombie consuming CPU.
 func watchParent(ctx context.Context, cancel context.CancelFunc) {
 	startParent := os.Getppid()
@@ -208,6 +217,7 @@ func watchParent(ctx context.Context, cancel context.CancelFunc) {
 			if os.Getppid() != startParent {
 				log.Warn().Int("original_ppid", startParent).Int("current_ppid", os.Getppid()).Msg("parent died, sidecar exiting")
 				cancel()
+
 				return
 			}
 		}

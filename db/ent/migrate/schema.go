@@ -15,6 +15,7 @@ var (
 		{Name: "flush_interval_sec", Type: field.TypeInt, Default: 60},
 		{Name: "ping_timeout_ms", Type: field.TypeInt, Default: 2000},
 		{Name: "retention_raw_days", Type: field.TypeInt, Default: 7},
+		{Name: "retention_1min_days", Type: field.TypeInt, Default: 14},
 		{Name: "retention_5min_days", Type: field.TypeInt, Default: 90},
 		{Name: "wifi_sample_enabled", Type: field.TypeBool, Default: true},
 	}
@@ -116,6 +117,40 @@ var (
 			},
 		},
 	}
+	// Sample1minsColumns holds the columns for the "sample1mins" table.
+	Sample1minsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "bucket_start_unix_ms", Type: field.TypeInt64},
+		{Name: "target_label", Type: field.TypeString},
+		{Name: "count", Type: field.TypeInt},
+		{Name: "success_count", Type: field.TypeInt},
+		{Name: "fail_count", Type: field.TypeInt},
+		{Name: "rtt_p50_ms", Type: field.TypeFloat64, Nullable: true},
+		{Name: "rtt_p95_ms", Type: field.TypeFloat64, Nullable: true},
+		{Name: "rtt_p99_ms", Type: field.TypeFloat64, Nullable: true},
+		{Name: "rtt_max_ms", Type: field.TypeFloat64, Nullable: true},
+		{Name: "rtt_mean_ms", Type: field.TypeFloat64, Nullable: true},
+		{Name: "jitter_ms", Type: field.TypeFloat64, Nullable: true},
+		{Name: "errors", Type: field.TypeJSON, Nullable: true},
+	}
+	// Sample1minsTable holds the schema information for the "sample1mins" table.
+	Sample1minsTable = &schema.Table{
+		Name:       "sample1mins",
+		Columns:    Sample1minsColumns,
+		PrimaryKey: []*schema.Column{Sample1minsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sample1min_bucket_start_unix_ms_target_label",
+				Unique:  true,
+				Columns: []*schema.Column{Sample1minsColumns[1], Sample1minsColumns[2]},
+			},
+			{
+				Name:    "sample1min_bucket_start_unix_ms",
+				Unique:  false,
+				Columns: []*schema.Column{Sample1minsColumns[1]},
+			},
+		},
+	}
 	// Sample5minsColumns holds the columns for the "sample5mins" table.
 	Sample5minsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -206,6 +241,7 @@ var (
 		OutagesTable,
 		SamplesTable,
 		Sample1hsTable,
+		Sample1minsTable,
 		Sample5minsTable,
 		TargetsTable,
 		WifiSamplesTable,

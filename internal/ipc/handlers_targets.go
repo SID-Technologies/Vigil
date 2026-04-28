@@ -18,14 +18,18 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
+
 		return out, nil
 	})
 
 	s.Register("targets.create", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p createTargetParams
-		if err := json.Unmarshal(params, &p); err != nil {
+
+		err := json.Unmarshal(params, &p)
+		if err != nil {
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
+
 		if p.Label == "" || p.Host == "" || p.Kind == "" {
 			return nil, &Error{Code: "invalid_params", Message: "label, host, and kind are required"}
 		}
@@ -45,14 +49,18 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
+
 		return t, nil
 	})
 
 	s.Register("targets.update", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p updateTargetParams
-		if err := json.Unmarshal(params, &p); err != nil {
+
+		err := json.Unmarshal(params, &p)
+		if err != nil {
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
+
 		if p.ID == "" {
 			return nil, &Error{Code: "invalid_params", Message: "id required"}
 		}
@@ -62,6 +70,7 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 		if err != nil {
 			return nil, &Error{Code: "not_found", Message: err.Error()}
 		}
+
 		if existing.IsBuiltin && (p.Host != nil || p.Port != nil) {
 			return nil, &Error{Code: "builtin_immutable", Message: "builtin targets only allow toggling 'enabled'"}
 		}
@@ -70,14 +79,18 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
+
 		return t, nil
 	})
 
 	s.Register("targets.delete", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p deleteTargetParams
-		if err := json.Unmarshal(params, &p); err != nil {
+
+		err := json.Unmarshal(params, &p)
+		if err != nil {
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
+
 		if p.ID == "" {
 			return nil, &Error{Code: "invalid_params", Message: "id required"}
 		}
@@ -86,13 +99,16 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 		if err != nil {
 			return nil, &Error{Code: "not_found", Message: err.Error()}
 		}
+
 		if existing.IsBuiltin {
 			return nil, &Error{Code: "builtin_immutable", Message: "builtin targets cannot be deleted; disable instead"}
 		}
 
-		if err := storage.DeleteTarget(ctx, client, p.ID); err != nil {
+		err = storage.DeleteTarget(ctx, client, p.ID)
+		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
+
 		return map[string]bool{"ok": true}, nil
 	})
 }

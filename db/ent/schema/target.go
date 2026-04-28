@@ -20,6 +20,7 @@ type Target struct {
 	ent.Schema
 }
 
+// Fields lists the schema fields. Required by Ent's schema interface.
 func (Target) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
@@ -56,6 +57,7 @@ func (Target) Fields() []ent.Field {
 	}
 }
 
+// Indexes lists the schema indexes. Required by Ent's schema interface.
 func (Target) Indexes() []ent.Index {
 	return []ent.Index{
 		// Hot query: monitor loop fetches enabled targets every cycle.

@@ -1,3 +1,4 @@
+// Package schema contains the ent schema definitions.
 package schema
 
 import (
@@ -16,6 +17,7 @@ type AppConfig struct {
 	ent.Schema
 }
 
+// Fields lists the schema fields. Required by Ent's schema interface.
 func (AppConfig) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int("id").
@@ -33,10 +35,13 @@ func (AppConfig) Fields() []ent.Field {
 			Comment("Per-probe timeout in milliseconds"),
 		field.Int("retention_raw_days").
 			Default(7).
-			Comment("Days to retain raw samples before pruning (phase 3)"),
+			Comment("Days to retain raw samples before pruning"),
+		field.Int("retention_1min_days").
+			Default(14).
+			Comment("Days to retain 1-minute aggregations"),
 		field.Int("retention_5min_days").
 			Default(90).
-			Comment("Days to retain 5-minute aggregations (phase 3)"),
+			Comment("Days to retain 5-minute aggregations"),
 		field.Bool("wifi_sample_enabled").
 			Default(true),
 	}

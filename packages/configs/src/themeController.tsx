@@ -5,7 +5,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 
 // Theme style options. Vigil ships `nightwatch` as the default; the others are
 // inherited from the Pugio config so users can switch.
-export type ThemeStyle = 'nightwatch' | 'default' | 'torch' | 'retro' | 'odyssey';
+export type ThemeStyle = 'nightwatch' | 'default' | 'torch' | 'odyssey';
 
 // Accent color options (for default theme only)
 export type AccentColor = 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'teal';
@@ -16,7 +16,6 @@ export type TamaguiThemeName =
   | 'light_blue' | 'dark_blue'
   | 'light_green' | 'dark_green'
   | 'light_torch' | 'dark_torch'
-  | 'light_retro' | 'dark_retro'
   | 'light_odyssey' | 'dark_odyssey'
   | 'light_nightwatch' | 'dark_nightwatch';
 
@@ -26,7 +25,6 @@ interface ThemeContextType {
   accentColor: AccentColor;
   resolvedTheme: TamaguiThemeName;
   isDark: boolean;
-  isRetro: boolean;
   setThemeMode: (mode: ThemeMode) => void;
   setThemeStyle: (style: ThemeStyle) => void;
   setAccentColor: (color: AccentColor) => void;
@@ -40,7 +38,6 @@ const ThemeContext = createContext<ThemeContextType>({
   accentColor: 'blue',
   resolvedTheme: 'dark_nightwatch',
   isDark: true,
-  isRetro: false,
   setThemeMode: () => {},
   setThemeStyle: () => {},
   setAccentColor: () => {},
@@ -76,7 +73,7 @@ const resolveThemeName = (
 const LS_THEME_MODE = 'vigil-theme-mode';
 const LS_THEME_STYLE = 'vigil-theme-style';
 
-const VALID_STYLES: ThemeStyle[] = ['nightwatch', 'default', 'torch', 'retro', 'odyssey'];
+const VALID_STYLES: ThemeStyle[] = ['nightwatch', 'default', 'torch', 'odyssey'];
 
 export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
@@ -113,7 +110,6 @@ export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
   // Resolve the actual theme
   const isDark = themeMode === 'system' ? systemTheme === 'dark' : themeMode === 'dark';
-  const isRetro = themeStyle === 'retro';
   const resolvedTheme = resolveThemeName(themeMode, themeStyle, systemTheme);
 
   // Per-style accent color as CSS custom property.
@@ -125,7 +121,6 @@ export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
       nightwatch: { light: '#b8742a', dark: '#e0a458' },
       default: { light: '#0090ff', dark: '#0090ff' },
       torch: { light: '#8b5cf6', dark: '#8b5cf6' },
-      retro: { light: '#d97706', dark: '#f59e0b' },
       odyssey: { light: '#b08d3e', dark: '#c8a84e' },
     };
     const colors = accentMap[themeStyle] || accentMap.nightwatch;
@@ -178,7 +173,6 @@ export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
         accentColor,
         resolvedTheme,
         isDark,
-        isRetro,
         setThemeMode,
         setThemeStyle,
         setAccentColor,

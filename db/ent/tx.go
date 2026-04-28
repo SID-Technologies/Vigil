@@ -20,6 +20,8 @@ type Tx struct {
 	Sample *SampleClient
 	// Sample1h is the client for interacting with the Sample1h builders.
 	Sample1h *Sample1hClient
+	// Sample1min is the client for interacting with the Sample1min builders.
+	Sample1min *Sample1minClient
 	// Sample5min is the client for interacting with the Sample5min builders.
 	Sample5min *Sample5minClient
 	// Target is the client for interacting with the Target builders.
@@ -161,6 +163,7 @@ func (tx *Tx) init() {
 	tx.Outage = NewOutageClient(tx.config)
 	tx.Sample = NewSampleClient(tx.config)
 	tx.Sample1h = NewSample1hClient(tx.config)
+	tx.Sample1min = NewSample1minClient(tx.config)
 	tx.Sample5min = NewSample5minClient(tx.config)
 	tx.Target = NewTargetClient(tx.config)
 	tx.WifiSample = NewWifiSampleClient(tx.config)

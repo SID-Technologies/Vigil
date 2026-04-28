@@ -111,6 +111,27 @@ func (_u *AppConfigUpdate) AddRetentionRawDays(v int) *AppConfigUpdate {
 	return _u
 }
 
+// SetRetention1minDays sets the "retention_1min_days" field.
+func (_u *AppConfigUpdate) SetRetention1minDays(v int) *AppConfigUpdate {
+	_u.mutation.ResetRetention1minDays()
+	_u.mutation.SetRetention1minDays(v)
+	return _u
+}
+
+// SetNillableRetention1minDays sets the "retention_1min_days" field if the given value is not nil.
+func (_u *AppConfigUpdate) SetNillableRetention1minDays(v *int) *AppConfigUpdate {
+	if v != nil {
+		_u.SetRetention1minDays(*v)
+	}
+	return _u
+}
+
+// AddRetention1minDays adds value to the "retention_1min_days" field.
+func (_u *AppConfigUpdate) AddRetention1minDays(v int) *AppConfigUpdate {
+	_u.mutation.AddRetention1minDays(v)
+	return _u
+}
+
 // SetRetention5minDays sets the "retention_5min_days" field.
 func (_u *AppConfigUpdate) SetRetention5minDays(v int) *AppConfigUpdate {
 	_u.mutation.ResetRetention5minDays()
@@ -210,6 +231,12 @@ func (_u *AppConfigUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedRetentionRawDays(); ok {
 		_spec.AddField(appconfig.FieldRetentionRawDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Retention1minDays(); ok {
+		_spec.SetField(appconfig.FieldRetention1minDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRetention1minDays(); ok {
+		_spec.AddField(appconfig.FieldRetention1minDays, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Retention5minDays(); ok {
 		_spec.SetField(appconfig.FieldRetention5minDays, field.TypeInt, value)
@@ -321,6 +348,27 @@ func (_u *AppConfigUpdateOne) SetNillableRetentionRawDays(v *int) *AppConfigUpda
 // AddRetentionRawDays adds value to the "retention_raw_days" field.
 func (_u *AppConfigUpdateOne) AddRetentionRawDays(v int) *AppConfigUpdateOne {
 	_u.mutation.AddRetentionRawDays(v)
+	return _u
+}
+
+// SetRetention1minDays sets the "retention_1min_days" field.
+func (_u *AppConfigUpdateOne) SetRetention1minDays(v int) *AppConfigUpdateOne {
+	_u.mutation.ResetRetention1minDays()
+	_u.mutation.SetRetention1minDays(v)
+	return _u
+}
+
+// SetNillableRetention1minDays sets the "retention_1min_days" field if the given value is not nil.
+func (_u *AppConfigUpdateOne) SetNillableRetention1minDays(v *int) *AppConfigUpdateOne {
+	if v != nil {
+		_u.SetRetention1minDays(*v)
+	}
+	return _u
+}
+
+// AddRetention1minDays adds value to the "retention_1min_days" field.
+func (_u *AppConfigUpdateOne) AddRetention1minDays(v int) *AppConfigUpdateOne {
+	_u.mutation.AddRetention1minDays(v)
 	return _u
 }
 
@@ -453,6 +501,12 @@ func (_u *AppConfigUpdateOne) sqlSave(ctx context.Context) (_node *AppConfig, er
 	}
 	if value, ok := _u.mutation.AddedRetentionRawDays(); ok {
 		_spec.AddField(appconfig.FieldRetentionRawDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Retention1minDays(); ok {
+		_spec.SetField(appconfig.FieldRetention1minDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRetention1minDays(); ok {
+		_spec.AddField(appconfig.FieldRetention1minDays, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Retention5minDays(); ok {
 		_spec.SetField(appconfig.FieldRetention5minDays, field.TypeInt, value)

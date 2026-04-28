@@ -23,6 +23,7 @@ type Sample1h struct {
 	ent.Schema
 }
 
+// Fields lists the schema fields. Required by Ent's schema interface.
 func (Sample1h) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("bucket_start_unix_ms").
@@ -42,6 +43,7 @@ func (Sample1h) Fields() []ent.Field {
 	}
 }
 
+// Indexes lists the schema indexes. Required by Ent's schema interface.
 func (Sample1h) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("bucket_start_unix_ms", "target_label").Unique(),

@@ -202,8 +202,8 @@
               {{replace .Scope "target:" ""}}
             {{end}}
           </td>
-          <td>{{.StartTsUnixMs}}</td>
-          <td>{{if .EndTsUnixMs}}{{.EndTsUnixMs}}{{else}}<em style="color:var(--bad)">ongoing</em>{{end}}</td>
+          <td>{{.StartTSUnixMs}}</td>
+          <td>{{if .EndTSUnixMs}}{{.EndTSUnixMs}}{{else}}<em style="color:var(--bad)">ongoing</em>{{end}}</td>
           <td class="num">{{.ConsecutiveFailures}}</td>
           <td>
             {{range $code, $count := .Errors}}

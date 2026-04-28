@@ -2,10 +2,12 @@ package probes
 
 import (
 	"context"
-	"errors"
 	"net"
 	"runtime"
 	"time"
+
+	"github.com/sid-technologies/vigil/internal/stats"
+	"github.com/sid-technologies/vigil/pkg/errors"
 
 	probing "github.com/prometheus-community/pro-bing"
 )
@@ -25,12 +27,15 @@ type ICMPProbe struct {
 	target Target
 }
 
+//nolint:revive // self-evident from signature
 func NewICMPProbe(target Target) *ICMPProbe {
 	return &ICMPProbe{target: target}
 }
 
+//nolint:revive // self-evident from signature
 func (p *ICMPProbe) Target() Target { return p.target }
 
+// Run executes the ICMP probe.
 func (p *ICMPProbe) Run(ctx context.Context, timeoutMs int) Result {
 	r := Result{
 		TimestampMs: nowMs(),
@@ -44,7 +49,9 @@ func (p *ICMPProbe) Run(ctx context.Context, timeoutMs int) Result {
 			r.Error = errPtr("dns")
 			return r
 		}
+
 		r.Error = errPtr("init_failed")
+
 		return r
 	}
 
@@ -56,29 +63,27 @@ func (p *ICMPProbe) Run(ctx context.Context, timeoutMs int) Result {
 	pinger.Timeout = time.Duration(timeoutMs) * time.Millisecond
 
 	// Run blocks until the count is met or timeout fires.
-	if err := pinger.RunWithContext(ctx); err != nil {
+	err = pinger.RunWithContext(ctx)
+	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			r.Error = errPtr("timeout")
 			return r
 		}
+
 		r.Error = errPtr("send_failed")
+
 		return r
 	}
 
-	stats := pinger.Statistics()
-	if stats.PacketsRecv == 0 {
+	pingStats := pinger.Statistics()
+	if pingStats.PacketsRecv == 0 {
 		r.Error = errPtr("timeout")
 		return r
 	}
 
 	r.Success = true
-	rttMs := float64(stats.AvgRtt) / float64(time.Millisecond)
-	r.RTTMs = floatPtr(round2(rttMs))
-	return r
-}
+	rttMs := float64(pingStats.AvgRtt) / float64(time.Millisecond)
+	r.RTTMs = floatPtr(stats.Round2(rttMs))
 
-// round2 rounds to 2 decimal places — matches the Python tool's output so
-// existing dashboards / CSV consumers see identical values.
-func round2(v float64) float64 {
-	return float64(int64(v*100+0.5)) / 100.0
+	return r
 }

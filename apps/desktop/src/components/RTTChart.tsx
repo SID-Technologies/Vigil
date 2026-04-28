@@ -22,7 +22,8 @@ import { useColorPalette } from '../hooks/useColorPalette';
 import { useLiveSamples } from '../hooks/useLiveSamples';
 import { useSamplesQuery } from '../hooks/useSamplesQuery';
 import { useAllProbeTargets } from '../hooks/useAllProbeTargets';
-import type { AggregatedRow } from '../lib/ipc';
+import { fillRawGaps, generateTimeTicks } from '../lib/chartTime';
+import type { RawSample } from '../lib/ipc';
 
 interface RTTChartProps {
   selectedLabels: string[];
@@ -43,27 +44,34 @@ interface RTTChartProps {
  * keep the page feeling alive between the 30s data refetches.
  */
 export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
-  const fromMs = useMemo(() => Date.now() - 60 * 60 * 1000, []);
-  const toMs = useMemo(() => Date.now(), []);
+  // Dashboard is the "is the network ok right now" surface — 15 min at
+  // raw 2.5s gives ~360 points per target, so a 30-second blip is
+  // visible at the moment it happens. The History page covers longer
+  // windows. Recompute on every render so the window slides forward
+  // with the wall clock; the React Query cache key handles dedup.
+  const fromMs = Date.now() - 15 * 60 * 1000;
+  const toMs = Date.now();
 
   const { tick } = useLiveSamples(); // for the live pulse heartbeat
   const allTargets = useAllProbeTargets();
   const samples = useSamplesQuery({
     fromMs,
     toMs,
-    granularity: '5min',
+    granularity: 'raw',
     targetLabels: selectedLabels.length > 0 ? selectedLabels : undefined,
   });
   const { getColor } = useColorPalette();
 
-  const rows = samples.data && samples.data.granularity === '5min' ? samples.data.rows : [];
+  const rows = samples.data && samples.data.granularity === 'raw' ? samples.data.rows : [];
 
   const data = useMemo(() => {
     if (selectedLabels.length === 0) {
-      return rollupMedian(rows);
+      return fillRawGaps(rollupMedianRaw(rows));
     }
-    return pivotByTarget(rows, selectedLabels);
+    return fillRawGaps(pivotRaw(rows, selectedLabels));
   }, [rows, selectedLabels]);
+
+  const xTicks = useMemo(() => generateTimeTicks(fromMs, toMs, 5), [fromMs, toMs]);
 
   const isEmpty = data.length === 0;
   const isLoading = samples.isLoading && rows.length === 0;
@@ -105,12 +113,20 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
           detail="Vigil's first 5-minute summary lands about 6 minutes after start. Until then, you'll see live data on the tiles below."
         />
       ) : selectedLabels.length === 0 ? (
-        <MedianAreaChart data={data as MedianPoint[]} />
+        <MedianAreaChart
+          data={data as MedianPoint[]}
+          fromMs={fromMs}
+          toMs={toMs}
+          xTicks={xTicks}
+        />
       ) : (
         <PerTargetLineChart
           data={data as PivotPoint[]}
           selectedLabels={selectedLabels}
           getColor={getColor}
+          fromMs={fromMs}
+          toMs={toMs}
+          xTicks={xTicks}
         />
       )}
 
@@ -145,7 +161,17 @@ interface MedianPoint {
   medianP50: number;
 }
 
-function MedianAreaChart({ data }: { data: MedianPoint[] }) {
+function MedianAreaChart({
+  data,
+  fromMs,
+  toMs,
+  xTicks,
+}: {
+  data: MedianPoint[];
+  fromMs: number;
+  toMs: number;
+  xTicks: number[];
+}) {
   return (
     <YStack height={220}>
       <ResponsiveContainer width="100%" height="100%">
@@ -157,7 +183,15 @@ function MedianAreaChart({ data }: { data: MedianPoint[] }) {
             </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--borderColor)" strokeDasharray="3 3" />
-          <XAxis dataKey="ts" tickFormatter={fmtTime} {...axisStyle} />
+          <XAxis
+            dataKey="ts"
+            type="number"
+            scale="time"
+            domain={[fromMs, toMs]}
+            ticks={xTicks}
+            tickFormatter={fmtTime}
+            {...axisStyle}
+          />
           <YAxis {...axisStyle} width={42} label={yLabel} />
           <Tooltip
             content={<ChartTooltip formatLabel={fmtTimeLong} unit="ms" caption="median p50 across targets" />}
@@ -170,6 +204,7 @@ function MedianAreaChart({ data }: { data: MedianPoint[] }) {
             strokeWidth={2}
             fill="url(#rttFill)"
             isAnimationActive={false}
+            connectNulls={false}
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -186,17 +221,31 @@ function PerTargetLineChart({
   data,
   selectedLabels,
   getColor,
+  fromMs,
+  toMs,
+  xTicks,
 }: {
   data: PivotPoint[];
   selectedLabels: string[];
   getColor: (label: string) => string;
+  fromMs: number;
+  toMs: number;
+  xTicks: number[];
 }) {
   return (
     <YStack height={220}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
           <CartesianGrid stroke="var(--borderColor)" strokeDasharray="3 3" />
-          <XAxis dataKey="ts" tickFormatter={fmtTime} {...axisStyle} />
+          <XAxis
+            dataKey="ts"
+            type="number"
+            scale="time"
+            domain={[fromMs, toMs]}
+            ticks={xTicks}
+            tickFormatter={fmtTime}
+            {...axisStyle}
+          />
           <YAxis {...axisStyle} width={42} label={yLabel} />
           <Tooltip
             content={<ChartTooltip formatLabel={fmtTimeLong} unit="ms" />}
@@ -211,7 +260,7 @@ function PerTargetLineChart({
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
-              connectNulls
+              connectNulls={false}
             />
           ))}
         </LineChart>
@@ -237,27 +286,37 @@ function ChartEmptyState({ headline, detail }: { headline: string; detail: strin
 // Data shaping
 // ============================================================================
 
-function rollupMedian(rows: AggregatedRow[]): MedianPoint[] {
-  const byBucket = new Map<number, number[]>();
+/**
+ * Group raw probes by their (already-very-near) timestamp and take the
+ * median RTT across reachable targets per cycle. Each `probe:cycle` event
+ * fires every ~2.5s and contains one probe per target — the timestamps
+ * within a cycle are within milliseconds of each other, so we round to
+ * the nearest probe-cadence bucket so concurrent probes group cleanly.
+ */
+function rollupMedianRaw(rows: RawSample[]): MedianPoint[] {
+  const byCycle = new Map<number, number[]>();
   for (const r of rows) {
-    if (r.rtt_p50_ms == null) continue;
-    const arr = byBucket.get(r.bucket_start_unix_ms) ?? [];
-    arr.push(r.rtt_p50_ms);
-    byBucket.set(r.bucket_start_unix_ms, arr);
+    if (!r.success || r.rtt_ms == null) continue;
+    // Round to the nearest second so a 13-target cycle's probes (which
+    // span tens of ms) land in the same group.
+    const t = Math.round(r.ts_unix_ms / 1000) * 1000;
+    const arr = byCycle.get(t) ?? [];
+    arr.push(r.rtt_ms);
+    byCycle.set(t, arr);
   }
-  return Array.from(byBucket.keys())
+  return Array.from(byCycle.keys())
     .sort((a, b) => a - b)
-    .map((b) => ({ ts: b, medianP50: median(byBucket.get(b)!) }));
+    .map((t) => ({ ts: t, medianP50: median(byCycle.get(t)!) }));
 }
 
-function pivotByTarget(rows: AggregatedRow[], selectedLabels: string[]): PivotPoint[] {
+function pivotRaw(rows: RawSample[], selectedLabels: string[]): PivotPoint[] {
   const allowed = new Set(selectedLabels);
   const byTs = new Map<number, PivotPoint>();
   for (const r of rows) {
-    if (!allowed.has(r.target_label) || r.rtt_p50_ms == null) continue;
-    const existing = byTs.get(r.bucket_start_unix_ms) ?? { ts: r.bucket_start_unix_ms };
-    existing[r.target_label] = r.rtt_p50_ms;
-    byTs.set(r.bucket_start_unix_ms, existing);
+    if (!allowed.has(r.target_label) || !r.success || r.rtt_ms == null) continue;
+    const existing = byTs.get(r.ts_unix_ms) ?? { ts: r.ts_unix_ms };
+    existing[r.target_label] = r.rtt_ms;
+    byTs.set(r.ts_unix_ms, existing);
   }
   return Array.from(byTs.values()).sort((a, b) => a.ts - b.ts);
 }

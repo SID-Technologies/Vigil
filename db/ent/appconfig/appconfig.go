@@ -19,6 +19,8 @@ const (
 	FieldPingTimeoutMs = "ping_timeout_ms"
 	// FieldRetentionRawDays holds the string denoting the retention_raw_days field in the database.
 	FieldRetentionRawDays = "retention_raw_days"
+	// FieldRetention1minDays holds the string denoting the retention_1min_days field in the database.
+	FieldRetention1minDays = "retention_1min_days"
 	// FieldRetention5minDays holds the string denoting the retention_5min_days field in the database.
 	FieldRetention5minDays = "retention_5min_days"
 	// FieldWifiSampleEnabled holds the string denoting the wifi_sample_enabled field in the database.
@@ -34,6 +36,7 @@ var Columns = []string{
 	FieldFlushIntervalSec,
 	FieldPingTimeoutMs,
 	FieldRetentionRawDays,
+	FieldRetention1minDays,
 	FieldRetention5minDays,
 	FieldWifiSampleEnabled,
 }
@@ -57,6 +60,8 @@ var (
 	DefaultPingTimeoutMs int
 	// DefaultRetentionRawDays holds the default value on creation for the "retention_raw_days" field.
 	DefaultRetentionRawDays int
+	// DefaultRetention1minDays holds the default value on creation for the "retention_1min_days" field.
+	DefaultRetention1minDays int
 	// DefaultRetention5minDays holds the default value on creation for the "retention_5min_days" field.
 	DefaultRetention5minDays int
 	// DefaultWifiSampleEnabled holds the default value on creation for the "wifi_sample_enabled" field.
@@ -89,6 +94,11 @@ func ByPingTimeoutMs(opts ...sql.OrderTermOption) OrderOption {
 // ByRetentionRawDays orders the results by the retention_raw_days field.
 func ByRetentionRawDays(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRetentionRawDays, opts...).ToFunc()
+}
+
+// ByRetention1minDays orders the results by the retention_1min_days field.
+func ByRetention1minDays(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRetention1minDays, opts...).ToFunc()
 }
 
 // ByRetention5minDays orders the results by the retention_5min_days field.

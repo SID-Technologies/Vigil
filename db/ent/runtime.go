@@ -9,6 +9,7 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/outage"
 	"github.com/sid-technologies/vigil/db/ent/sample"
 	"github.com/sid-technologies/vigil/db/ent/sample1h"
+	"github.com/sid-technologies/vigil/db/ent/sample1min"
 	"github.com/sid-technologies/vigil/db/ent/sample5min"
 	"github.com/sid-technologies/vigil/db/ent/schema"
 	"github.com/sid-technologies/vigil/db/ent/target"
@@ -36,12 +37,16 @@ func init() {
 	appconfigDescRetentionRawDays := appconfigFields[4].Descriptor()
 	// appconfig.DefaultRetentionRawDays holds the default value on creation for the retention_raw_days field.
 	appconfig.DefaultRetentionRawDays = appconfigDescRetentionRawDays.Default.(int)
+	// appconfigDescRetention1minDays is the schema descriptor for retention_1min_days field.
+	appconfigDescRetention1minDays := appconfigFields[5].Descriptor()
+	// appconfig.DefaultRetention1minDays holds the default value on creation for the retention_1min_days field.
+	appconfig.DefaultRetention1minDays = appconfigDescRetention1minDays.Default.(int)
 	// appconfigDescRetention5minDays is the schema descriptor for retention_5min_days field.
-	appconfigDescRetention5minDays := appconfigFields[5].Descriptor()
+	appconfigDescRetention5minDays := appconfigFields[6].Descriptor()
 	// appconfig.DefaultRetention5minDays holds the default value on creation for the retention_5min_days field.
 	appconfig.DefaultRetention5minDays = appconfigDescRetention5minDays.Default.(int)
 	// appconfigDescWifiSampleEnabled is the schema descriptor for wifi_sample_enabled field.
-	appconfigDescWifiSampleEnabled := appconfigFields[6].Descriptor()
+	appconfigDescWifiSampleEnabled := appconfigFields[7].Descriptor()
 	// appconfig.DefaultWifiSampleEnabled holds the default value on creation for the wifi_sample_enabled field.
 	appconfig.DefaultWifiSampleEnabled = appconfigDescWifiSampleEnabled.Default.(bool)
 	outageFields := schema.Outage{}.Fields()
@@ -66,6 +71,12 @@ func init() {
 	sample1hDescTargetLabel := sample1hFields[1].Descriptor()
 	// sample1h.TargetLabelValidator is a validator for the "target_label" field. It is called by the builders before save.
 	sample1h.TargetLabelValidator = sample1hDescTargetLabel.Validators[0].(func(string) error)
+	sample1minFields := schema.Sample1min{}.Fields()
+	_ = sample1minFields
+	// sample1minDescTargetLabel is the schema descriptor for target_label field.
+	sample1minDescTargetLabel := sample1minFields[1].Descriptor()
+	// sample1min.TargetLabelValidator is a validator for the "target_label" field. It is called by the builders before save.
+	sample1min.TargetLabelValidator = sample1minDescTargetLabel.Validators[0].(func(string) error)
 	sample5minFields := schema.Sample5min{}.Fields()
 	_ = sample5minFields
 	// sample5minDescTargetLabel is the schema descriptor for target_label field.

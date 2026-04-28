@@ -26,21 +26,27 @@ func RegisterConfigHandlers(s *Server, client *ent.Client, onChange OnConfigChan
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
+
 		return out, nil
 	})
 
 	s.Register("config.update", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var patch storage.AppConfigPatch
-		if err := json.Unmarshal(params, &patch); err != nil {
+
+		err := json.Unmarshal(params, &patch)
+		if err != nil {
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
+
 		out, err := storage.UpdateAppConfig(ctx, client, patch)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
+
 		if onChange != nil {
 			onChange(out)
 		}
+
 		return out, nil
 	})
 }

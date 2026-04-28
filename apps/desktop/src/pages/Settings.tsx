@@ -24,6 +24,7 @@ const NUMERIC_KEYS: ConfigNumericKey[] = [
   'ping_timeout_ms',
   'flush_interval_sec',
   'retention_raw_days',
+  'retention_1min_days',
   'retention_5min_days',
 ];
 
@@ -33,6 +34,7 @@ function seedRaw(cfg: AppConfig): RawNumeric {
     ping_timeout_ms: String(cfg.ping_timeout_ms),
     flush_interval_sec: String(cfg.flush_interval_sec),
     retention_raw_days: String(cfg.retention_raw_days),
+    retention_1min_days: String(cfg.retention_1min_days),
     retention_5min_days: String(cfg.retention_5min_days),
   };
 }
@@ -73,6 +75,31 @@ export function SettingsPage() {
   }, [raw]);
 
   const hasErrors = Object.keys(errors).length > 0;
+  // `dirty` has to be computed in a way that's safe before the config has
+  // landed — otherwise the next hook (⌘S effect) would sit behind a
+  // conditional early return and break Rules of Hooks.
+  const dirty = !!(cfg.data && draft && JSON.stringify(draft) !== JSON.stringify(cfg.data));
+
+  // ⌘S / Ctrl+S to save — matches macOS / Windows native conventions.
+  // preventDefault stops the WebKit "save page as HTML" fallback.
+  //
+  // CRITICAL: This effect must live above any conditional early-return so
+  // its hook-call position is stable across renders. The handler itself
+  // guards against the pre-config-load state (draft == null).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (!draft || !dirty || hasErrors || update.isPending) return;
+        update.mutate(draft, {
+          onSuccess: () => setSavedAt(new Date()),
+        });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, dirty, hasErrors, update.isPending]);
 
   if (!draft || !raw) {
     return (
@@ -113,8 +140,6 @@ export function SettingsPage() {
     );
   }
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(cfg.data);
-
   const setNumeric = (key: ConfigNumericKey, text: string) => {
     setRaw((prev) => (prev ? { ...prev, [key]: text } : prev));
     const r = validateField(key, text);
@@ -139,20 +164,6 @@ export function SettingsPage() {
       setRaw(seedRaw(cfg.data));
     }
   };
-
-  // ⌘S / Ctrl+S to save — matches macOS / Windows native conventions.
-  // preventDefault stops the WebKit "save page as HTML" fallback.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        if (dirty && !hasErrors && !update.isPending) onSave();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, hasErrors, update.isPending]);
 
   const saveDisabled = !dirty || hasErrors || update.isPending;
 
@@ -271,7 +282,7 @@ export function SettingsPage() {
         >
           <FormField
             label="Raw samples — keep for (days)"
-            hint={`How many days of detailed per-probe records to keep. After this, only the 5-minute and 1-hour summaries remain — still plenty for charts, but you can't drill down to individual probes. Default 7. Range ${CONFIG_BOUNDS.retention_raw_days.min}–${CONFIG_BOUNDS.retention_raw_days.max}.`}
+            hint={`How many days of detailed per-probe records to keep. After this, only the 1-minute and coarser summaries remain — still plenty for charts, but you can't drill down to individual probes. Default 7. Range ${CONFIG_BOUNDS.retention_raw_days.min}–${CONFIG_BOUNDS.retention_raw_days.max}.`}
             error={errors.retention_raw_days}
           >
             <Input
@@ -283,8 +294,21 @@ export function SettingsPage() {
             />
           </FormField>
           <FormField
+            label="1-minute buckets — keep for (days)"
+            hint={`How many days of 1-minute summaries to keep. These power History charts in the 1h–6h band where 5-minute buckets are too coarse. Default 14. Range ${CONFIG_BOUNDS.retention_1min_days.min}–${CONFIG_BOUNDS.retention_1min_days.max}.`}
+            error={errors.retention_1min_days}
+          >
+            <Input
+              size="$3"
+              keyboardType="number-pad"
+              value={raw.retention_1min_days}
+              borderColor={errors.retention_1min_days ? '$red8' : undefined}
+              onChangeText={(v) => setNumeric('retention_1min_days', v)}
+            />
+          </FormField>
+          <FormField
             label="5-minute buckets — keep for (days)"
-            hint={`How many days of 5-minute summaries to keep. These power the History page charts. Default 90. Range ${CONFIG_BOUNDS.retention_5min_days.min}–${CONFIG_BOUNDS.retention_5min_days.max}.`}
+            hint={`How many days of 5-minute summaries to keep. These power the History page charts at week-and-longer windows. Default 90. Range ${CONFIG_BOUNDS.retention_5min_days.min}–${CONFIG_BOUNDS.retention_5min_days.max}.`}
             error={errors.retention_5min_days}
           >
             <Input

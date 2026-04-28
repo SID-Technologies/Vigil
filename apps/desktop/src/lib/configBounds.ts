@@ -46,6 +46,13 @@ export const CONFIG_BOUNDS = {
     noun: 'Raw retention',
     unit: 'days',
   },
+  retention_1min_days: {
+    min: 1,
+    max: 365,
+    integer: true,
+    noun: '1-minute retention',
+    unit: 'days',
+  },
   retention_5min_days: {
     min: 1,
     max: 3650,

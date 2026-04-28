@@ -27,6 +27,7 @@ type Outage struct {
 	ent.Schema
 }
 
+// Fields lists the schema fields. Required by Ent's schema interface.
 func (Outage) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
@@ -50,6 +51,7 @@ func (Outage) Fields() []ent.Field {
 	}
 }
 
+// Indexes lists the schema indexes. Required by Ent's schema interface.
 func (Outage) Indexes() []ent.Index {
 	return []ent.Index{
 		// "Show me outages from the last 7d, optionally filtered by scope."

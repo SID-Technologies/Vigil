@@ -15,6 +15,16 @@ import (
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
+// Log rotation policy. Sized for a long-running tray app — 10 MB × 5 files
+// covers ~50 MB of compressed history, comfortably more than any normal
+// debug session needs while staying small enough not to alarm users.
+const (
+	logMaxSizeMB    = 10
+	logMaxBackups   = 5
+	logMaxAgeDays   = 30
+	logDirPerm      = 0o755
+)
+
 // InitializeLogger sets up zerolog to write to a rolling file under dataDir.
 // Output goes to <dataDir>/vigil.log with size-based rotation; older logs are
 // kept compressed alongside.
@@ -23,21 +33,24 @@ import (
 // in development).
 func InitializeLogger(dataDir string) (io.Writer, error) {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+	err := os.MkdirAll(dataDir, logDirPerm)
+	if err != nil {
 		return nil, err //nolint:wrapcheck // boundary call, plain return is fine
 	}
 
 	rotator := &lumberjack.Logger{
 		Filename:   filepath.Join(dataDir, "vigil.log"),
-		MaxSize:    10, // megabytes
-		MaxBackups: 5,
-		MaxAge:     30, // days
+		MaxSize:    logMaxSizeMB,
+		MaxBackups: logMaxBackups,
+		MaxAge:     logMaxAgeDays,
 		Compress:   true,
 	}
 
 	log.Logger = zerolog.New(rotator).With().Timestamp().Logger()
+
 	return rotator, nil
 }
 
@@ -45,6 +58,8 @@ func InitializeLogger(dataDir string) (io.Writer, error) {
 // data dir. Logs go to stderr (NEVER stdout — that's reserved for IPC).
 func InitializeLoggerStderr() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+
 	log.Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 }

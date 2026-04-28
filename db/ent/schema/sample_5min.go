@@ -24,6 +24,7 @@ type Sample5min struct {
 	ent.Schema
 }
 
+// Fields lists the schema fields. Required by Ent's schema interface.
 func (Sample5min) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("bucket_start_unix_ms").
@@ -46,6 +47,7 @@ func (Sample5min) Fields() []ent.Field {
 	}
 }
 
+// Indexes lists the schema indexes. Required by Ent's schema interface.
 func (Sample5min) Indexes() []ent.Index {
 	return []ent.Index{
 		// Composite uniqueness so the aggregator can do INSERT OR IGNORE for

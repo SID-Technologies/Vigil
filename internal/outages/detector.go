@@ -7,10 +7,10 @@
 //
 //   - Maintain in-memory state per scope: { startTs, consecutiveFailures, errors }.
 //   - On each probe result for a scope:
-//       success → if state has 3+ consecutive failures, close the open
-//                  Outage row by setting end_ts. Reset state.
-//       failure → increment counter, capture error, capture startTs if first.
-//                  When counter hits 3, write a new Outage row with end_ts=null.
+//     success → if state has 3+ consecutive failures, close the open
+//     Outage row by setting end_ts. Reset state.
+//     failure → increment counter, capture error, capture startTs if first.
+//     When counter hits 3, write a new Outage row with end_ts=null.
 //   - Network scope is special: one update per cycle, computed from "did
 //     ANY probe succeed in this cycle?".
 //
@@ -24,6 +24,7 @@ package outages
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"sync"
 
 	"github.com/google/uuid"
@@ -39,13 +40,13 @@ import (
 const MinConsecutiveFailures = 3
 
 // scopeState tracks an in-flight failure run for a single scope.
-// startTsMs records when the run started so we can write it as the Outage's
+// startTSMs records when the run started so we can write it as the Outage's
 // start_ts on threshold crossing.
 //
 // outageID is set once we cross the threshold and write the row — used to
 // update end_ts on the closing success.
 type scopeState struct {
-	startTsMs   int64
+	startTSMs   int64
 	consecutive int
 	errors      map[string]int
 	outageID    string // non-empty once an Outage row exists
@@ -92,11 +93,13 @@ func (d *Detector) OnCycle(ctx context.Context, ev monitor.CycleEvent) {
 	// Network-wide scope: failed iff every probe in the cycle failed.
 	networkFailed := ev.Total > 0 && ev.OK == 0
 	combinedErr := combinedError(ev.Results)
-	d.advance(ctx, "network", ev.TsUnixMs, !networkFailed, combinedErr)
+	d.advance(ctx, "network", ev.TSUnixMs, !networkFailed, combinedErr)
 }
 
 // advance is the per-(scope, sample) state machine. Called for every probe
 // result and once per cycle for network scope.
+//
+//nolint:revive // success is the per-sample outcome, not a config flag — splitting would fragment the state machine
 func (d *Detector) advance(ctx context.Context, scope string, tsMs int64, success bool, errPtr *string) {
 	state, ok := d.scopes[scope]
 	if !ok {
@@ -109,18 +112,21 @@ func (d *Detector) advance(ctx context.Context, scope string, tsMs int64, succes
 		if state.consecutive >= MinConsecutiveFailures && state.outageID != "" {
 			d.closeOutage(ctx, scope, state, tsMs)
 		}
-		state.startTsMs = 0
+
+		state.startTSMs = 0
 		state.consecutive = 0
 		state.errors = nil
 		state.outageID = ""
+
 		return
 	}
 
 	// Failure path.
 	if state.consecutive == 0 {
-		state.startTsMs = tsMs
+		state.startTSMs = tsMs
 		state.errors = map[string]int{}
 	}
+
 	state.consecutive++
 	if errPtr != nil {
 		state.errors[*errPtr]++
@@ -140,10 +146,11 @@ func (d *Detector) advance(ctx context.Context, scope string, tsMs int64, succes
 
 func (d *Detector) openOutage(ctx context.Context, scope string, state *scopeState) {
 	id := uuid.NewString()
+
 	row, err := d.client.Outage.Create().
 		SetID(id).
 		SetScope(scope).
-		SetStartTsUnixMs(state.startTsMs).
+		SetStartTsUnixMs(state.startTSMs).
 		SetConsecutiveFailures(state.consecutive).
 		SetErrors(copyMap(state.errors)).
 		Save(ctx)
@@ -151,32 +158,37 @@ func (d *Detector) openOutage(ctx context.Context, scope string, state *scopeSta
 		log.Error().Err(err).Str("scope", scope).Msg("outages: open failed")
 		return
 	}
+
 	state.outageID = id
 
 	log.Warn().Str("scope", scope).Int("consecutive", state.consecutive).Msg("outage detected")
+
 	if d.onEvent != nil {
 		d.onEvent("outage:start", outageRowPayloadOf(row))
 	}
 }
 
 func (d *Detector) updateOpenOutage(ctx context.Context, state *scopeState) {
-	if _, err := d.client.Outage.UpdateOneID(state.outageID).
+	_, err := d.client.Outage.UpdateOneID(state.outageID).
 		SetConsecutiveFailures(state.consecutive).
 		SetErrors(copyMap(state.errors)).
-		Save(ctx); err != nil {
+		Save(ctx)
+	if err != nil {
 		log.Error().Err(err).Str("id", state.outageID).Msg("outages: update failed")
 	}
 }
 
-func (d *Detector) closeOutage(ctx context.Context, scope string, state *scopeState, endTsMs int64) {
+func (d *Detector) closeOutage(ctx context.Context, scope string, state *scopeState, endTSMs int64) {
 	row, err := d.client.Outage.UpdateOneID(state.outageID).
-		SetEndTsUnixMs(endTsMs).
+		SetEndTsUnixMs(endTSMs).
 		Save(ctx)
 	if err != nil {
 		log.Error().Err(err).Str("id", state.outageID).Msg("outages: close failed")
 		return
 	}
+
 	log.Info().Str("scope", scope).Int("consecutive", state.consecutive).Msg("outage cleared")
+
 	if d.onEvent != nil {
 		d.onEvent("outage:end", outageRowPayloadOf(row))
 	}
@@ -184,28 +196,37 @@ func (d *Detector) closeOutage(ctx context.Context, scope string, state *scopeSt
 
 func combinedError(results []probes.Result) *string {
 	errs := map[string]bool{}
+
 	for _, r := range results {
 		if r.Success {
 			continue
 		}
+
 		if r.Error != nil {
 			errs[*r.Error] = true
 		}
 	}
+
 	if len(errs) == 0 {
 		return nil
 	}
 	// Stable JSON-marshalable summary.
-	b, _ := json.Marshal(errs) //nolint:errcheck // deterministic
+	b, err := json.Marshal(errs)
+	if err != nil {
+		// map[string]bool can't realistically fail to marshal; log defensively.
+		log.Warn().Err(err).Msg("outages: combined-error marshal failed")
+		return nil
+	}
+
 	s := string(b)
+
 	return &s
 }
 
 func copyMap(m map[string]int) map[string]int {
 	out := make(map[string]int, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
+	maps.Copy(out, m)
+
 	return out
 }
 

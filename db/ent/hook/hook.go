@@ -57,6 +57,18 @@ func (f Sample1hFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.Sample1hMutation", m)
 }
 
+// The Sample1minFunc type is an adapter to allow the use of ordinary
+// function as Sample1min mutator.
+type Sample1minFunc func(context.Context, *ent.Sample1minMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f Sample1minFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.Sample1minMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.Sample1minMutation", m)
+}
+
 // The Sample5minFunc type is an adapter to allow the use of ordinary
 // function as Sample5min mutator.
 type Sample5minFunc func(context.Context, *ent.Sample5minMutation) (ent.Value, error)

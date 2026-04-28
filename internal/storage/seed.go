@@ -13,8 +13,10 @@ import (
 
 	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/db/ent/target"
+	"github.com/sid-technologies/vigil/internal/constants"
 	"github.com/sid-technologies/vigil/internal/probes"
 )
+
 
 // SeedDefaultTargets inserts the 12 builtin probe targets if and only if the
 // targets table is empty. Idempotent — safe to call on every startup.
@@ -25,13 +27,15 @@ import (
 func SeedDefaultTargets(ctx context.Context, client *ent.Client) error {
 	count, err := client.Target.Query().Count(ctx)
 	if err != nil {
-		return err //nolint:wrapcheck
+		return err //nolint:wrapcheck // wrapped at IPC boundary
 	}
+
 	if count > 0 {
 		return nil
 	}
 
 	defaults := probes.DefaultTargets()
+
 	bulk := make([]*ent.TargetCreate, 0, len(defaults))
 	for _, t := range defaults {
 		c := client.Target.Create().
@@ -44,13 +48,17 @@ func SeedDefaultTargets(ctx context.Context, client *ent.Client) error {
 		if t.Port != nil {
 			c.SetPort(*t.Port)
 		}
+
 		bulk = append(bulk, c)
 	}
 
-	if _, err := client.Target.CreateBulk(bulk...).Save(ctx); err != nil {
-		return err //nolint:wrapcheck
+	_, err = client.Target.CreateBulk(bulk...).Save(ctx)
+	if err != nil {
+		return err //nolint:wrapcheck // wrapped at IPC boundary
 	}
+
 	log.Info().Int("count", len(bulk)).Msg("storage: seeded default targets")
+
 	return nil
 }
 
@@ -60,23 +68,28 @@ func SeedDefaultTargets(ctx context.Context, client *ent.Client) error {
 func SeedAppConfig(ctx context.Context, client *ent.Client) error {
 	exists, err := client.AppConfig.Query().Where().Exist(ctx)
 	if err != nil {
-		return err //nolint:wrapcheck
+		return err //nolint:wrapcheck // wrapped at IPC boundary
 	}
+
 	if exists {
 		return nil
 	}
+
 	_, err = client.AppConfig.Create().
-		SetID(1).
-		SetPingIntervalSec(2.5).
-		SetFlushIntervalSec(60).
-		SetPingTimeoutMs(2000).
-		SetRetentionRawDays(7).
-		SetRetention5minDays(90).
+		SetID(AppConfigSingletonID).
+		SetPingIntervalSec(constants.DefaultPingIntervalSec).
+		SetFlushIntervalSec(constants.DefaultFlushIntervalSec).
+		SetPingTimeoutMs(constants.DefaultPingTimeoutMs).
+		SetRetentionRawDays(constants.DefaultRetentionRawDays).
+		SetRetention1minDays(constants.DefaultRetention1MinDays).
+		SetRetention5minDays(constants.DefaultRetention5MinDays).
 		SetWifiSampleEnabled(true).
 		Save(ctx)
 	if err != nil {
-		return err //nolint:wrapcheck
+		return err //nolint:wrapcheck // wrapped at IPC boundary
 	}
+
 	log.Info().Msg("storage: seeded app_config defaults")
+
 	return nil
 }

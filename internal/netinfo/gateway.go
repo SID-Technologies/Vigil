@@ -26,8 +26,10 @@ func DetectDefaultGateway() (string, bool) {
 	if err != nil {
 		return "", false
 	}
+
 	if ip == nil || ip.Equal(net.IPv4zero) {
 		return "", false
 	}
+
 	return ip.String(), true
 }

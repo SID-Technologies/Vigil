@@ -34,7 +34,7 @@ func Open(ctx context.Context, dataDir string) (*ent.Client, error) {
 
 	rawDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
 	}
 	// SQLite is single-writer; multiple writers serialize anyway. One
 	// connection avoids contention surprises and is plenty for a desktop tool.
@@ -43,9 +43,11 @@ func Open(ctx context.Context, dataDir string) (*ent.Client, error) {
 	drv := entsql.OpenDB(dialect.SQLite, rawDB)
 	client := ent.NewClient(ent.Driver(drv))
 
-	if err := client.Schema.Create(ctx); err != nil {
+	err = client.Schema.Create(ctx)
+	if err != nil {
 		_ = client.Close()
-		return nil, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
 	}
+
 	return client, nil
 }

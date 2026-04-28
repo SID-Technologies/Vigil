@@ -13,18 +13,18 @@ import (
 type Outage struct {
 	ID                  string         `json:"id"`
 	Scope               string         `json:"scope"`
-	StartTsUnixMs       int64          `json:"start_ts_unix_ms"`
-	EndTsUnixMs         *int64         `json:"end_ts_unix_ms,omitempty"`
+	StartTSUnixMs       int64          `json:"start_ts_unix_ms"`
+	EndTSUnixMs         *int64         `json:"end_ts_unix_ms,omitempty"`
 	ConsecutiveFailures int            `json:"consecutive_failures"`
 	Errors              map[string]int `json:"errors,omitempty"`
 }
 
 // QueryOutagesParams scopes an outages.list call.
 type QueryOutagesParams struct {
-	FromMs    int64
-	ToMs      int64
-	Scope     string // optional — if non-empty, filter to this scope
-	OnlyOpen  bool   // if true, only return outages with end_ts_unix_ms = null
+	FromMs   int64
+	ToMs     int64
+	Scope    string // optional — if non-empty, filter to this scope
+	OnlyOpen bool   // if true, only return outages with end_ts_unix_ms = null
 }
 
 // QueryOutages returns outages overlapping [fromMs, toMs]. Definition of
@@ -55,13 +55,14 @@ func QueryOutages(ctx context.Context, client *ent.Client, p QueryOutagesParams)
 	if p.Scope != "" {
 		q = q.Where(outage.ScopeEQ(p.Scope))
 	}
+
 	if p.OnlyOpen {
 		q = q.Where(outage.EndTsUnixMsIsNil())
 	}
 
 	rows, err := q.All(ctx)
 	if err != nil {
-		return nil, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
 	}
 
 	out := make([]Outage, 0, len(rows))
@@ -69,14 +70,16 @@ func QueryOutages(ctx context.Context, client *ent.Client, p QueryOutagesParams)
 		o := Outage{
 			ID:                  r.ID,
 			Scope:               r.Scope,
-			StartTsUnixMs:       r.StartTsUnixMs,
+			StartTSUnixMs:       r.StartTsUnixMs,
 			ConsecutiveFailures: r.ConsecutiveFailures,
 			Errors:              r.Errors,
 		}
 		if r.EndTsUnixMs != nil {
-			o.EndTsUnixMs = r.EndTsUnixMs
+			o.EndTSUnixMs = r.EndTsUnixMs
 		}
+
 		out = append(out, o)
 	}
+
 	return out, nil
 }

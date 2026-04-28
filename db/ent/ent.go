@@ -16,6 +16,7 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/outage"
 	"github.com/sid-technologies/vigil/db/ent/sample"
 	"github.com/sid-technologies/vigil/db/ent/sample1h"
+	"github.com/sid-technologies/vigil/db/ent/sample1min"
 	"github.com/sid-technologies/vigil/db/ent/sample5min"
 	"github.com/sid-technologies/vigil/db/ent/target"
 	"github.com/sid-technologies/vigil/db/ent/wifisample"
@@ -83,6 +84,7 @@ func checkColumn(t, c string) error {
 			outage.Table:     outage.ValidColumn,
 			sample.Table:     sample.ValidColumn,
 			sample1h.Table:   sample1h.ValidColumn,
+			sample1min.Table: sample1min.ValidColumn,
 			sample5min.Table: sample5min.ValidColumn,
 			target.Table:     target.ValidColumn,
 			wifisample.Table: wifisample.ValidColumn,

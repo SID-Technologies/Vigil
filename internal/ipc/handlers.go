@@ -19,6 +19,7 @@ func RegisterCoreHandlers(s *Server) {
 // in the sidebar/about.
 func handleHealthCheck(_ context.Context, _ json.RawMessage) (any, *Error) {
 	commit, _ := buildinfo.GitCommit()
+
 	return HealthCheckResult{
 		Status:  "ok",
 		Version: buildinfo.Version(),

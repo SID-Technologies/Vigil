@@ -44,16 +44,9 @@ secrets.txt
 .npmrc
 
 # ============================================================================
-# Python (legacy reference impl in src/pingscraper/)
+# Internal-only docs (kept locally, not shipped in the OSS repo)
 # ============================================================================
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-.uv/
-.ruff_cache/
-.mypy_cache/
-.pytest_cache/
+.impeccable.md
 
 # ============================================================================
 # Go

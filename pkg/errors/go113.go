@@ -1,4 +1,3 @@
-//nolint:wrapcheck // Wrapping not needed in this package.
 package errors
 
 import (

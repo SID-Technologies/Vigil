@@ -6,6 +6,12 @@ import (
 	"github.com/sid-technologies/vigil/internal/probes"
 )
 
+// initialBufferCap is the starting slice capacity for a fresh buffer. Sized
+// for the steady-state load (~5 rows/sec × 60s flush = 300 rows worst-case)
+// with a little headroom — keeps the slice from reallocating during the
+// common path.
+const initialBufferCap = 256
+
 // buffer is an unbounded in-memory queue of probe results waiting to be
 // flushed to the database. The probe loop pushes; the flusher drains.
 //
@@ -19,14 +25,7 @@ type buffer struct {
 }
 
 func newBuffer() *buffer {
-	return &buffer{results: make([]probes.Result, 0, 256)}
-}
-
-// push appends a result. Safe from any goroutine.
-func (b *buffer) push(r probes.Result) {
-	b.mu.Lock()
-	b.results = append(b.results, r)
-	b.mu.Unlock()
+	return &buffer{results: make([]probes.Result, 0, initialBufferCap)}
 }
 
 // pushMany appends a batch.
@@ -34,6 +33,7 @@ func (b *buffer) pushMany(rs []probes.Result) {
 	if len(rs) == 0 {
 		return
 	}
+
 	b.mu.Lock()
 	b.results = append(b.results, rs...)
 	b.mu.Unlock()
@@ -44,11 +44,14 @@ func (b *buffer) pushMany(rs []probes.Result) {
 func (b *buffer) drain() []probes.Result {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	if len(b.results) == 0 {
 		return nil
 	}
+
 	out := b.results
-	b.results = make([]probes.Result, 0, 256)
+	b.results = make([]probes.Result, 0, initialBufferCap)
+
 	return out
 }
 
@@ -58,6 +61,7 @@ func (b *buffer) requeue(rs []probes.Result) {
 	if len(rs) == 0 {
 		return
 	}
+
 	b.mu.Lock()
 	b.results = append(rs, b.results...)
 	b.mu.Unlock()
@@ -67,5 +71,6 @@ func (b *buffer) requeue(rs []probes.Result) {
 func (b *buffer) len() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	return len(b.results)
 }

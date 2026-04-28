@@ -1,29 +1,34 @@
 package probes
 
+// Well-known ports used by the default targets list.
+const (
+	HTTPSPort           = 443
+	GoogleSTUNAltPort   = 19302 // stun.l.google.com listens on 19302, not 3478
+)
+
 // DefaultTargets are the 12 builtin probe targets seeded into the database
-// on first run. Direct port of DEFAULT_TARGETS from src/pingscraper/probes.py.
-// At runtime the monitor adds a 13th probe — `router_icmp` — pointed at the
-// detected default gateway. That one isn't seeded into the DB because the
-// gateway can change (different network, DHCP renewal).
+// on first run. The monitor adds a 13th at runtime (`router_icmp`, pointed
+// at the detected default gateway), which isn't seeded because the gateway
+// can change across networks and DHCP renewals.
 //
 // The selection is deliberately stakeholder-proof: hostile counterparties
-// (ISPs, property managers) cannot wave away the evidence as "Google's
+// (ISPs, property managers) can't wave away the evidence as "Google's
 // problem" because the probes hit:
 //
-//   - Real video-call hostnames (teams.microsoft.com, zoom.us, outlook.office.com)
-//     over both ICMP and TCP:443.
-//   - Public anycast DNS (8.8.8.8, 1.1.1.1) over UDP:53 — actual DNS traffic.
-//   - Public STUN servers — the exact UDP protocol Teams/Zoom/Meet/Discord
-//     use at call setup.
+//   - Real video-call hostnames (teams.microsoft.com, zoom.us,
+//     outlook.office.com) over both ICMP and TCP:443.
+//   - Public anycast DNS (8.8.8.8, 1.1.1.1) over UDP:53 — actual DNS
+//     traffic, not just reachability.
+//   - Public STUN servers — the exact UDP protocol Teams / Zoom / Meet /
+//     Discord use at call setup.
 //
-// On startup, if the targets table is empty, all 13 are inserted with
-// is_builtin=true. Users can disable individual builtins or add custom
-// targets through the UI.
+// All 13 are inserted with is_builtin=true. Users can disable individual
+// builtins or add custom targets through the UI.
 func DefaultTargets() []Target {
-	port443 := 443
-	port53 := 53
-	port3478 := 3478
-	portStunGoogle := 19302
+	port443 := HTTPSPort
+	port53 := defaultDNSPort
+	port3478 := defaultSTUNPort
+	portStunGoogle := GoogleSTUNAltPort
 
 	return []Target{
 		// ICMP — network-layer reachability to anycast and the real video-call hostnames.

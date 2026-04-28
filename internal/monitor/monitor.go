@@ -41,7 +41,7 @@ type Config struct {
 // CycleEvent is emitted after every probe cycle. The frontend uses this to
 // render the live dashboard without polling.
 type CycleEvent struct {
-	TsUnixMs int64           `json:"ts_unix_ms"`
+	TSUnixMs int64           `json:"ts_unix_ms"`
 	Total    int             `json:"total"`
 	OK       int             `json:"ok"`
 	Fail     int             `json:"fail"`
@@ -88,6 +88,7 @@ func New(client *ent.Client, cfg Config) *Monitor {
 		buf:    buf,
 	}
 	m.flusher = newFlusher(client, buf, m)
+
 	return m
 }
 
@@ -95,6 +96,7 @@ func New(client *ent.Client, cfg Config) *Monitor {
 func (m *Monitor) Config() Config {
 	m.cfgMu.RLock()
 	defer m.cfgMu.RUnlock()
+
 	return m.cfg
 }
 
@@ -111,6 +113,7 @@ func (m *Monitor) UpdateConfig(cfg Config) {
 
 	m.wakeMu.Lock()
 	defer m.wakeMu.Unlock()
+
 	for _, w := range m.wakers {
 		select {
 		case w <- struct{}{}:
@@ -119,18 +122,6 @@ func (m *Monitor) UpdateConfig(cfg Config) {
 			// receiver re-reads config either way.
 		}
 	}
-}
-
-// subscribe registers a buffered (capacity 1) wake channel. Goroutines
-// select on it alongside their own ticker / timeout to be woken when
-// config changes. Capacity 1 means a wake fired between two iterations
-// is held until consumed — no missed reloads.
-func (m *Monitor) subscribe() <-chan struct{} {
-	ch := make(chan struct{}, 1)
-	m.wakeMu.Lock()
-	m.wakers = append(m.wakers, ch)
-	m.wakeMu.Unlock()
-	return ch
 }
 
 // SetOnCycle registers a callback invoked after each probe cycle. Used by
@@ -148,25 +139,65 @@ func (m *Monitor) SetProbes(probeList []probes.Probe) {
 	m.probesMu.Unlock()
 }
 
-// Run blocks until ctx is cancelled. Spawns the probe loop and flusher
+// Run blocks until ctx is canceled. Spawns the probe loop and flusher
 // goroutines; ensures both have stopped before returning so the sidecar can
 // shut down cleanly.
 func (m *Monitor) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		m.flusher.run(ctx)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		m.probeLoop(ctx)
-	}()
+	})
 
 	wg.Wait()
+}
+
+// AddDynamicGatewayProbe checks for a default gateway and, if found, prepends
+// a synthetic `router_icmp` probe to the active probe list. Called once at
+// startup before Run().
+//
+// The gateway is dynamic (changes with networks / DHCP) so we never persist
+// it — it's resolved fresh on each sidecar startup.
+func (*Monitor) AddDynamicGatewayProbe(existing []probes.Probe) []probes.Probe {
+	gateway, ok := netinfo.DetectDefaultGateway()
+	if !ok {
+		log.Warn().Msg("monitor: no default gateway detected — skipping router probe")
+		return existing
+	}
+
+	log.Info().Str("gateway", gateway).Msg("monitor: detected default gateway")
+
+	router := probes.Target{
+		Label: "router_icmp",
+		Kind:  probes.KindICMP,
+		Host:  gateway,
+	}
+
+	probe, err := probes.Build(router)
+	if err != nil {
+		// Should never happen — KindICMP is exhaustive in factory.go.
+		return existing
+	}
+
+	return append([]probes.Probe{probe}, existing...)
+}
+
+// subscribe registers a buffered (capacity 1) wake channel. Goroutines
+// select on it alongside their own ticker / timeout to be woken when
+// config changes. Capacity 1 means a wake fired between two iterations
+// is held until consumed — no missed reloads.
+func (m *Monitor) subscribe() <-chan struct{} {
+	ch := make(chan struct{}, 1)
+
+	m.wakeMu.Lock()
+	m.wakers = append(m.wakers, ch)
+	m.wakeMu.Unlock()
+
+	return ch
 }
 
 // probeLoop fires all probes in parallel each cycle, sleeping between cycles
@@ -179,21 +210,26 @@ func (m *Monitor) Run(ctx context.Context) {
 func (m *Monitor) probeLoop(ctx context.Context) {
 	wake := m.subscribe()
 	cycleStart := time.Now()
+
 	for {
-		if err := ctx.Err(); err != nil {
+		err := ctx.Err()
+		if err != nil {
 			log.Info().Msg("monitor: probe loop exiting")
 			return
 		}
+
 		m.runCycle(ctx)
 
 		interval := time.Duration(m.Config().PingIntervalSec * float64(time.Second))
 		next := cycleStart.Add(interval)
+
 		sleep := time.Until(next)
 		if sleep <= 0 {
 			// Fell behind — resync rather than fire rapidly.
 			cycleStart = time.Now()
 			continue
 		}
+
 		select {
 		case <-ctx.Done():
 			return
@@ -205,6 +241,7 @@ func (m *Monitor) probeLoop(ctx context.Context) {
 			cycleStart = time.Now()
 			continue
 		}
+
 		cycleStart = next
 	}
 }
@@ -222,7 +259,8 @@ func (m *Monitor) runCycle(parent context.Context) {
 	}
 
 	cfg := m.Config()
-	cycleTimeout := time.Duration(cfg.PingTimeoutMs)*time.Millisecond*3/2 + 500*time.Millisecond
+	cycleTimeout := computeCycleTimeout(cfg.PingTimeoutMs)
+
 	ctx, cancel := context.WithTimeout(parent, cycleTimeout)
 	defer cancel()
 
@@ -230,28 +268,30 @@ func (m *Monitor) runCycle(parent context.Context) {
 	g, gctx := errgroup.WithContext(ctx)
 	// Bound concurrency so we don't open a thousand sockets if the user
 	// configures a giant target list.
-	g.SetLimit(64)
+	g.SetLimit(maxCycleConcurrency)
 
 	for i, p := range probeList {
-		i, p := i, p
 		g.Go(func() error {
 			results[i] = p.Run(gctx, cfg.PingTimeoutMs)
 			return nil
 		})
 	}
+
 	_ = g.Wait()
 
 	m.buf.pushMany(results)
 
 	if m.onCycle != nil {
 		ok := 0
+
 		for _, r := range results {
 			if r.Success {
 				ok++
 			}
 		}
+
 		m.onCycle(CycleEvent{
-			TsUnixMs: time.Now().UnixMilli(),
+			TSUnixMs: time.Now().UnixMilli(),
 			Total:    len(results),
 			OK:       ok,
 			Fail:     len(results) - ok,
@@ -260,29 +300,25 @@ func (m *Monitor) runCycle(parent context.Context) {
 	}
 }
 
-// AddDynamicGatewayProbe checks for a default gateway and, if found, prepends
-// a synthetic `router_icmp` probe to the active probe list. Called once at
-// startup before Run().
-//
-// The gateway is dynamic (changes with networks / DHCP) so we never persist
-// it — it's resolved fresh on each sidecar startup.
-func (m *Monitor) AddDynamicGatewayProbe(existing []probes.Probe) []probes.Probe {
-	gateway, ok := netinfo.DetectDefaultGateway()
-	if !ok {
-		log.Warn().Msg("monitor: no default gateway detected — skipping router probe")
-		return existing
-	}
-	log.Info().Str("gateway", gateway).Msg("monitor: detected default gateway")
+// maxCycleConcurrency caps the number of probes that run in parallel per
+// cycle. 64 is well above the default 13 targets but stops a misconfigured
+// 10000-target list from opening a socket per goroutine.
+const maxCycleConcurrency = 64
 
-	router := probes.Target{
-		Label: "router_icmp",
-		Kind:  probes.KindICMP,
-		Host:  gateway,
-	}
-	probe, err := probes.Build(router)
-	if err != nil {
-		// Should never happen — KindICMP is exhaustive in factory.go.
-		return existing
-	}
-	return append([]probes.Probe{probe}, existing...)
+// computeCycleTimeout derives the per-cycle deadline from the per-probe
+// timeout. We give the cycle 1.5× the probe timeout (so a slow probe can
+// retry once) plus a 500ms safety margin (DNS resolution, TLS handshake
+// jitter, scheduler latency). Tested at the ping_timeout_ms range bounds
+// in configBounds — both 100ms and 30s map to sensible cycle deadlines.
+func computeCycleTimeout(probeTimeoutMs int) time.Duration {
+	const (
+		retrySlackMultiplier    = 3
+		retrySlackDivisor       = 2
+		schedulerSafetyMarginMs = 500
+	)
+
+	base := time.Duration(probeTimeoutMs) * time.Millisecond
+
+	return base*retrySlackMultiplier/retrySlackDivisor +
+		schedulerSafetyMarginMs*time.Millisecond
 }

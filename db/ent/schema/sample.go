@@ -27,6 +27,7 @@ type Sample struct {
 	ent.Schema
 }
 
+// Fields lists the schema fields. Required by Ent's schema interface.
 func (Sample) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("ts_unix_ms").
@@ -50,6 +51,7 @@ func (Sample) Fields() []ent.Field {
 	}
 }
 
+// Indexes lists the schema indexes. Required by Ent's schema interface.
 func (Sample) Indexes() []ent.Index {
 	return []ent.Index{
 		// Time-range scans for the History page.

@@ -7,8 +7,9 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/sid-technologies/vigil/db/ent"
-	entSample "github.com/sid-technologies/vigil/db/ent/sample"
+	entsample "github.com/sid-technologies/vigil/db/ent/sample"
 	"github.com/sid-technologies/vigil/db/ent/wifisample"
+	"github.com/sid-technologies/vigil/internal/constants"
 	"github.com/sid-technologies/vigil/internal/netinfo"
 	"github.com/sid-technologies/vigil/internal/probes"
 )
@@ -46,7 +47,7 @@ func newFlusher(client *ent.Client, buf *buffer, cfg configProvider) *flusher {
 	}
 }
 
-// run blocks until ctx is cancelled. Re-times the loop each iteration so
+// run blocks until ctx is canceled. Re-times the loop each iteration so
 // flush_interval changes propagate without restart.
 func (f *flusher) run(ctx context.Context) {
 	wake := f.cfg.subscribe()
@@ -54,15 +55,20 @@ func (f *flusher) run(ctx context.Context) {
 	for {
 		interval := time.Duration(f.cfg.Config().FlushIntervalSec) * time.Second
 		if interval <= 0 {
-			interval = 60 * time.Second // safety guard
+			// Safety guard: if the user somehow wrote a non-positive flush
+			// interval, fall back to the seed default so the flusher keeps
+			// running instead of busy-looping on a zero timer.
+			interval = time.Duration(constants.DefaultFlushIntervalSec) * time.Second
 		}
+
 		timer := time.NewTimer(interval)
 
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			// Final flush so we don't lose the last partial cycle.
-			f.flushOnce(context.Background())
+			f.flushOnce(context.Background()) //nolint:contextcheck // final flush must complete despite parent ctx being canceled
+
 			return
 		case <-timer.C:
 			f.flushOnce(ctx)
@@ -79,35 +85,45 @@ func (f *flusher) flushOnce(ctx context.Context) {
 	if f.cfg.Config().WifiSampleEnabled {
 		f.flushWifi(ctx)
 	}
+
 	f.flushSamples(ctx)
 }
 
 func (f *flusher) flushWifi(ctx context.Context) {
 	sample := netinfo.SampleWifi(ctx)
+
 	create := f.client.WifiSample.Create().
 		SetTsUnixMs(sample.Timestamp.UnixMilli())
 	if sample.SSID != nil {
 		create.SetSsid(*sample.SSID)
 	}
+
 	if sample.BSSID != nil {
 		create.SetBssid(*sample.BSSID)
 	}
+
 	if sample.SignalPercent != nil {
 		create.SetSignalPercent(*sample.SignalPercent)
 	}
+
 	if sample.RSSIDbm != nil {
 		create.SetRssiDbm(*sample.RSSIDbm)
 	}
+
 	if sample.RxRateMbps != nil {
 		create.SetRxRateMbps(*sample.RxRateMbps)
 	}
+
 	if sample.TxRateMbps != nil {
 		create.SetTxRateMbps(*sample.TxRateMbps)
 	}
+
 	if sample.Channel != nil {
 		create.SetChannel(*sample.Channel)
 	}
-	if _, err := create.Save(ctx); err != nil {
+
+	_, err := create.Save(ctx)
+	if err != nil {
 		log.Warn().Err(err).Msg("flusher: wifi sample save failed")
 	}
 }
@@ -129,27 +145,34 @@ func (f *flusher) flushSamples(ctx context.Context) {
 		if r.Target.Port != nil {
 			c.SetTargetPort(*r.Target.Port)
 		}
+
 		if r.RTTMs != nil {
 			c.SetRttMs(*r.RTTMs)
 		}
+
 		if r.Error != nil {
 			c.SetError(*r.Error)
 		}
+
 		bulk = append(bulk, c)
 	}
 
-	if _, err := f.client.Sample.CreateBulk(bulk...).Save(ctx); err != nil {
+	_, err := f.client.Sample.CreateBulk(bulk...).Save(ctx)
+	if err != nil {
 		log.Error().Err(err).Int("count", len(results)).Msg("flusher: bulk insert failed, requeuing")
 		f.buf.requeue(results)
+
 		return
 	}
 
 	ok := 0
+
 	for _, r := range results {
 		if r.Success {
 			ok++
 		}
 	}
+
 	log.Info().
 		Int("flushed", len(results)).
 		Int("ok", ok).
@@ -164,6 +187,6 @@ func (f *flusher) flushSamples(ctx context.Context) {
 
 // Compile-time anchor — keeps unused-import warnings honest.
 var (
-	_ = entSample.FieldTsUnixMs
+	_ = entsample.FieldTsUnixMs
 	_ = wifisample.FieldTsUnixMs
 )

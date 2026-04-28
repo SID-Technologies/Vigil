@@ -23,9 +23,11 @@ type AppConfig struct {
 	FlushIntervalSec int `json:"flush_interval_sec,omitempty"`
 	// Per-probe timeout in milliseconds
 	PingTimeoutMs int `json:"ping_timeout_ms,omitempty"`
-	// Days to retain raw samples before pruning (phase 3)
+	// Days to retain raw samples before pruning
 	RetentionRawDays int `json:"retention_raw_days,omitempty"`
-	// Days to retain 5-minute aggregations (phase 3)
+	// Days to retain 1-minute aggregations
+	Retention1minDays int `json:"retention_1min_days,omitempty"`
+	// Days to retain 5-minute aggregations
 	Retention5minDays int `json:"retention_5min_days,omitempty"`
 	// WifiSampleEnabled holds the value of the "wifi_sample_enabled" field.
 	WifiSampleEnabled bool `json:"wifi_sample_enabled,omitempty"`
@@ -41,7 +43,7 @@ func (*AppConfig) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case appconfig.FieldPingIntervalSec:
 			values[i] = new(sql.NullFloat64)
-		case appconfig.FieldID, appconfig.FieldFlushIntervalSec, appconfig.FieldPingTimeoutMs, appconfig.FieldRetentionRawDays, appconfig.FieldRetention5minDays:
+		case appconfig.FieldID, appconfig.FieldFlushIntervalSec, appconfig.FieldPingTimeoutMs, appconfig.FieldRetentionRawDays, appconfig.FieldRetention1minDays, appconfig.FieldRetention5minDays:
 			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -87,6 +89,12 @@ func (_m *AppConfig) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field retention_raw_days", values[i])
 			} else if value.Valid {
 				_m.RetentionRawDays = int(value.Int64)
+			}
+		case appconfig.FieldRetention1minDays:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field retention_1min_days", values[i])
+			} else if value.Valid {
+				_m.Retention1minDays = int(value.Int64)
 			}
 		case appconfig.FieldRetention5minDays:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -147,6 +155,9 @@ func (_m *AppConfig) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("retention_raw_days=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RetentionRawDays))
+	builder.WriteString(", ")
+	builder.WriteString("retention_1min_days=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Retention1minDays))
 	builder.WriteString(", ")
 	builder.WriteString("retention_5min_days=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Retention5minDays))

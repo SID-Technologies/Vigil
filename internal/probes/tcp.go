@@ -2,12 +2,14 @@ package probes
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/sid-technologies/vigil/internal/stats"
+	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
 // TCPProbe times a TCP three-way handshake to host:port. Proves the actual
@@ -18,12 +20,15 @@ type TCPProbe struct {
 	target Target
 }
 
+//nolint:revive // self-evident from signature
 func NewTCPProbe(target Target) *TCPProbe {
 	return &TCPProbe{target: target}
 }
 
+//nolint:revive // self-evident from signature
 func (p *TCPProbe) Target() Target { return p.target }
 
+// Run executes the TCP probe.
 func (p *TCPProbe) Run(ctx context.Context, timeoutMs int) Result {
 	r := Result{
 		TimestampMs: nowMs(),
@@ -42,15 +47,18 @@ func (p *TCPProbe) Run(ctx context.Context, timeoutMs int) Result {
 	address := net.JoinHostPort(p.target.Host, strconv.Itoa(*p.target.Port))
 
 	start := time.Now()
+
 	conn, err := d.DialContext(dialCtx, "tcp", address)
 	if err != nil {
 		r.Error = errPtr(classifyDialError(err))
 		return r
 	}
+
 	_ = conn.Close()
 
 	r.Success = true
-	r.RTTMs = floatPtr(round2(float64(time.Since(start)) / float64(time.Millisecond)))
+	r.RTTMs = floatPtr(stats.Round2(float64(time.Since(start)) / float64(time.Millisecond)))
+
 	return r
 }
 
@@ -61,22 +69,28 @@ func classifyDialError(err error) string {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "timeout"
 	}
+
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
 		return "dns"
 	}
+
 	if errors.Is(err, syscall.ECONNREFUSED) {
 		return "conn_refused"
 	}
+
 	if errors.Is(err, syscall.EHOSTUNREACH) {
 		return "host_unreachable"
 	}
+
 	if errors.Is(err, syscall.ENETUNREACH) {
 		return "net_unreachable"
 	}
+
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
 		return "timeout"
 	}
+
 	return fmt.Sprintf("unknown:%T", err)
 }

@@ -4,24 +4,35 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sid-technologies/vigil/internal/constants"
 	"github.com/sid-technologies/vigil/internal/stats"
 	"github.com/sid-technologies/vigil/internal/storage"
 )
+
+// targetScopePrefix is the prefix outage Scope strings use for per-target
+// outages (e.g. "target:google_dns_icmp"). Network-wide outages use scope
+// "network" instead and are filtered out of per-target burst counts.
+const targetScopePrefix = "target:"
+
+// minSamplesForBucketP95 guards against computing p95 on tiny samples in
+// hourly buckets — a 5-sample window's "95th percentile" is just the max,
+// which gives misleading numbers in reports.
+const minSamplesForBucketP95 = 20
 
 // report is the consolidated payload written to JSON output and passed to
 // the HTML template. Designed to be self-describing — each field has a
 // stable JSON tag, and timestamps are duplicated in unix-ms (machine) +
 // ISO8601 (human) form so the file is friendly to scripts AND eyeballs.
 type report struct {
-	GeneratedAt   string         `json:"generated_at"`
-	WindowStart   string         `json:"window_start_utc"`
-	WindowEnd     string         `json:"window_end_utc"`
-	WindowHours   float64        `json:"window_hours"`
-	TotalSamples  int            `json:"total_samples"`
-	Summary       summaryStats   `json:"summary"`
-	PerTarget     []targetStats  `json:"per_target"`
-	HourlyBuckets []hourlyBucket `json:"hourly"`
-	Outages       []storage.Outage `json:"outages"`
+	GeneratedAt   string               `json:"generated_at"`
+	WindowStart   string               `json:"window_start_utc"`
+	WindowEnd     string               `json:"window_end_utc"`
+	WindowHours   float64              `json:"window_hours"`
+	TotalSamples  int                  `json:"total_samples"`
+	Summary       summaryStats         `json:"summary"`
+	PerTarget     []targetStats        `json:"per_target"`
+	HourlyBuckets []hourlyBucket       `json:"hourly"`
+	Outages       []storage.Outage     `json:"outages"`
 	WifiSamples   []storage.WifiSample `json:"wifi_samples,omitempty"`
 	// Raw probes only included in JSON to keep file size manageable; the
 	// HTML report doesn't need them inline.
@@ -29,15 +40,15 @@ type report struct {
 }
 
 type summaryStats struct {
-	UptimePct        float64  `json:"uptime_pct"`
-	TotalSuccess     int      `json:"successful_probes"`
-	TotalFail        int      `json:"failed_probes"`
-	OutageCount      int      `json:"outage_count"`
-	OutageNetwork    int      `json:"network_outage_count"`
-	OutageTargets    int      `json:"target_outage_count"`
-	MeanRTTMs        *float64 `json:"mean_rtt_ms,omitempty"`
-	P95RTTMs         *float64 `json:"p95_rtt_ms,omitempty"`
-	P99RTTMs         *float64 `json:"p99_rtt_ms,omitempty"`
+	UptimePct     float64  `json:"uptime_pct"`
+	TotalSuccess  int      `json:"successful_probes"`
+	TotalFail     int      `json:"failed_probes"`
+	OutageCount   int      `json:"outage_count"`
+	OutageNetwork int      `json:"network_outage_count"`
+	OutageTargets int      `json:"target_outage_count"`
+	MeanRTTMs     *float64 `json:"mean_rtt_ms,omitempty"`
+	P95RTTMs      *float64 `json:"p95_rtt_ms,omitempty"`
+	P99RTTMs      *float64 `json:"p99_rtt_ms,omitempty"`
 }
 
 type targetStats struct {
@@ -59,12 +70,12 @@ type targetStats struct {
 }
 
 type hourlyBucket struct {
-	Hour       string   `json:"hour_local"`
-	Total      int      `json:"total"`
-	Failed     int      `json:"failed"`
-	UptimePct  float64  `json:"uptime_pct"`
-	MedianRTT  *float64 `json:"median_rtt_ms,omitempty"`
-	P95RTT     *float64 `json:"p95_rtt_ms,omitempty"`
+	Hour      string   `json:"hour_local"`
+	Total     int      `json:"total"`
+	Failed    int      `json:"failed"`
+	UptimePct float64  `json:"uptime_pct"`
+	MedianRTT *float64 `json:"median_rtt_ms,omitempty"`
+	P95RTT    *float64 `json:"p95_rtt_ms,omitempty"`
 }
 
 // buildReport folds raw samples + wifi + outages into the report payload.
@@ -73,14 +84,14 @@ type hourlyBucket struct {
 func buildReport(fromMs, toMs int64, samples []storage.Sample, wifi []storage.WifiSample, outages []storage.Outage) *report {
 	now := time.Now().UTC()
 	r := &report{
-		GeneratedAt: now.Format(time.RFC3339),
-		WindowStart: time.UnixMilli(fromMs).UTC().Format(time.RFC3339),
-		WindowEnd:   time.UnixMilli(toMs).UTC().Format(time.RFC3339),
-		WindowHours: float64(toMs-fromMs) / float64(time.Hour/time.Millisecond),
+		GeneratedAt:  now.Format(time.RFC3339),
+		WindowStart:  time.UnixMilli(fromMs).UTC().Format(time.RFC3339),
+		WindowEnd:    time.UnixMilli(toMs).UTC().Format(time.RFC3339),
+		WindowHours:  float64(toMs-fromMs) / float64(time.Hour/time.Millisecond),
 		TotalSamples: len(samples),
-		Outages:     outages,
-		WifiSamples: wifi,
-		Samples:     samples,
+		Outages:      outages,
+		WifiSamples:  wifi,
+		Samples:      samples,
 	}
 
 	r.Summary = computeSummary(samples, outages)
@@ -100,6 +111,7 @@ func computeSummary(samples []storage.Sample, outages []storage.Outage) summaryS
 	for _, s := range samples {
 		if s.Success {
 			out.TotalSuccess++
+
 			if s.RTTMs != nil {
 				rtts = append(rtts, *s.RTTMs)
 			}
@@ -107,9 +119,10 @@ func computeSummary(samples []storage.Sample, outages []storage.Outage) summaryS
 			out.TotalFail++
 		}
 	}
+
 	total := out.TotalSuccess + out.TotalFail
 	if total > 0 {
-		out.UptimePct = round2(float64(out.TotalSuccess) / float64(total) * 100)
+		out.UptimePct = stats.Round2(float64(out.TotalSuccess) / float64(total) * constants.PercentMultiplier)
 	}
 
 	out.OutageCount = len(outages)
@@ -123,25 +136,30 @@ func computeSummary(samples []storage.Sample, outages []storage.Outage) summaryS
 
 	if len(rtts) > 0 {
 		sort.Float64s(rtts)
+
 		if v, ok := stats.Mean(rtts); ok {
-			r := round2(v)
+			r := stats.Round2(v)
 			out.MeanRTTMs = &r
 		}
-		if v, ok := stats.Percentile(rtts, 0.95); ok {
-			r := round2(v)
+
+		if v, ok := stats.Percentile(rtts, constants.P95Quantile); ok {
+			r := stats.Round2(v)
 			out.P95RTTMs = &r
 		}
-		if v, ok := stats.Percentile(rtts, 0.99); ok {
-			r := round2(v)
+
+		if v, ok := stats.Percentile(rtts, constants.P99Quantile); ok {
+			r := stats.Round2(v)
 			out.P99RTTMs = &r
 		}
 	}
+
 	return out
 }
 
 func computePerTarget(samples []storage.Sample, outages []storage.Outage) []targetStats {
 	groups := make(map[string][]storage.Sample)
 	heads := make(map[string]storage.Sample)
+
 	for _, s := range samples {
 		groups[s.TargetLabel] = append(groups[s.TargetLabel], s)
 		if _, ok := heads[s.TargetLabel]; !ok {
@@ -150,9 +168,10 @@ func computePerTarget(samples []storage.Sample, outages []storage.Outage) []targ
 	}
 
 	bursts := make(map[string]int)
+
 	for _, o := range outages {
-		if len(o.Scope) > 7 && o.Scope[:7] == "target:" {
-			bursts[o.Scope[7:]]++
+		if len(o.Scope) > len(targetScopePrefix) && o.Scope[:len(targetScopePrefix)] == targetScopePrefix {
+			bursts[o.Scope[len(targetScopePrefix):]]++
 		}
 	}
 
@@ -169,10 +188,12 @@ func computePerTarget(samples []storage.Sample, outages []storage.Outage) []targ
 		}
 
 		rtts := make([]float64, 0, len(rows))
+
 		rttsTimeOrder := make([]float64, 0, len(rows))
 		for _, r := range rows {
 			if r.Success {
 				statsRow.Successful++
+
 				if r.RTTMs != nil {
 					rtts = append(rtts, *r.RTTMs)
 					rttsTimeOrder = append(rttsTimeOrder, *r.RTTMs)
@@ -183,40 +204,60 @@ func computePerTarget(samples []storage.Sample, outages []storage.Outage) []targ
 		}
 
 		if statsRow.Total > 0 {
-			statsRow.UptimePct = round2(float64(statsRow.Successful) / float64(statsRow.Total) * 100)
+			statsRow.UptimePct = stats.Round2(
+				float64(statsRow.Successful) / float64(statsRow.Total) * constants.PercentMultiplier,
+			)
 		}
-		if len(rtts) > 0 {
-			sort.Float64s(rtts)
-			if v, ok := stats.Percentile(rtts, 0.5); ok {
-				r := round2(v)
-				statsRow.P50Ms = &r
-			}
-			if v, ok := stats.Percentile(rtts, 0.95); ok {
-				r := round2(v)
-				statsRow.P95Ms = &r
-			}
-			if v, ok := stats.Percentile(rtts, 0.99); ok {
-				r := round2(v)
-				statsRow.P99Ms = &r
-			}
-			max := round2(rtts[len(rtts)-1])
-			statsRow.MaxMs = &max
-			if v, ok := stats.Mean(rtts); ok {
-				r := round2(v)
-				statsRow.MeanMs = &r
-			}
-			if v, ok := stats.JitterMs(rttsTimeOrder); ok {
-				r := round2(v)
-				statsRow.JitterMs = &r
-			}
-		}
+
+		FillTargetRTTStats(&statsRow, rtts, rttsTimeOrder)
+
 		out = append(out, statsRow)
 	}
 
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Label < out[j].Label
 	})
+
 	return out
+}
+
+// FillTargetRTTStats populates the percentile, max, mean, and jitter pointer
+// fields on row from rtts (any order — sorted in place) and rttsTimeOrder
+// (must be in time order). No-op when rtts is empty.
+func FillTargetRTTStats(row *targetStats, rtts, rttsTimeOrder []float64) {
+	if len(rtts) == 0 {
+		return
+	}
+
+	sort.Float64s(rtts)
+
+	if v, ok := stats.Percentile(rtts, constants.P50Quantile); ok {
+		r := stats.Round2(v)
+		row.P50Ms = &r
+	}
+
+	if v, ok := stats.Percentile(rtts, constants.P95Quantile); ok {
+		r := stats.Round2(v)
+		row.P95Ms = &r
+	}
+
+	if v, ok := stats.Percentile(rtts, constants.P99Quantile); ok {
+		r := stats.Round2(v)
+		row.P99Ms = &r
+	}
+
+	maxMs := stats.Round2(rtts[len(rtts)-1])
+	row.MaxMs = &maxMs
+
+	if v, ok := stats.Mean(rtts); ok {
+		r := stats.Round2(v)
+		row.MeanMs = &r
+	}
+
+	if v, ok := stats.JitterMs(rttsTimeOrder); ok {
+		r := stats.Round2(v)
+		row.JitterMs = &r
+	}
 }
 
 // computeHourlyBuckets produces a row per hour-of-the-day local-time bucket
@@ -227,15 +268,18 @@ func computeHourlyBuckets(samples []storage.Sample) []hourlyBucket {
 		fail  int
 		rtts  []float64
 	}
+
 	buckets := make(map[string]*acc)
 
 	for _, s := range samples {
-		hr := time.UnixMilli(s.TsUnixMs).Local().Format("2006-01-02 15:00")
+		hr := time.UnixMilli(s.TSUnixMs).Local().Format("2006-01-02 15:00") //nolint:gosmopolitan // local time is intentional for user-facing reports
+
 		b := buckets[hr]
 		if b == nil {
 			b = &acc{}
 			buckets[hr] = b
 		}
+
 		b.total++
 		if !s.Success {
 			b.fail++
@@ -248,37 +292,43 @@ func computeHourlyBuckets(samples []storage.Sample) []hourlyBucket {
 	for k := range buckets {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
 
 	out := make([]hourlyBucket, 0, len(buckets))
 	for _, k := range keys {
 		b := buckets[k]
+
 		row := hourlyBucket{
 			Hour:   k,
 			Total:  b.total,
 			Failed: b.fail,
 		}
 		if b.total > 0 {
-			row.UptimePct = round2(float64(b.total-b.fail) / float64(b.total) * 100)
+			row.UptimePct = stats.Round2(
+				float64(b.total-b.fail) / float64(b.total) * constants.PercentMultiplier,
+			)
 		}
+
 		if len(b.rtts) > 0 {
 			sort.Float64s(b.rtts)
-			med := round2(b.rtts[len(b.rtts)/2])
+			med := stats.Round2(b.rtts[len(b.rtts)/2])
 			row.MedianRTT = &med
-			if len(b.rtts) > 20 {
-				idx := int(float64(len(b.rtts)) * 0.95)
+
+			if len(b.rtts) > minSamplesForBucketP95 {
+				idx := int(float64(len(b.rtts)) * constants.P95Quantile)
 				if idx >= len(b.rtts) {
 					idx = len(b.rtts) - 1
 				}
-				p95 := round2(b.rtts[idx])
+
+				p95 := stats.Round2(b.rtts[idx])
 				row.P95RTT = &p95
 			}
 		}
+
 		out = append(out, row)
 	}
+
 	return out
 }
 
-func round2(v float64) float64 {
-	return float64(int64(v*100+0.5)) / 100.0
-}

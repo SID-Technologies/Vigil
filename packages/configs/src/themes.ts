@@ -24,15 +24,6 @@ const torchStyleTokens = {
   radiusStyle: 'default',
 }
 
-const retroStyleTokens = {
-  shadowCard: '4px 4px 0px rgba(0,0,0,0.2)',
-  shadowCardHover: '6px 6px 0px rgba(0,0,0,0.25)',
-  shadowModal: '8px 8px 0px rgba(0,0,0,0.3)',
-  shadowButton: '3px 3px 0px rgba(0,0,0,0.2)',
-  shadowInset: 'inset 2px 2px 0px rgba(255,255,255,0.1)',
-  radiusStyle: 'retro',
-}
-
 // Night Watch — watchman's tower at 2am: cold dark slate, one warm amber light.
 // Subtle shadows, sharp not soft. Engineering-grade restraint.
 const nightWatchStyleTokens = {
@@ -295,54 +286,6 @@ const torchSemanticColorsDark = {
 }
 
 // =============================================================================
-// RETRO THEME
-// =============================================================================
-
-const retroDarkPalette = [
-  '#1a1814', '#252118', '#302a1f', '#3d3526',
-  '#4a402d', '#5c5038', '#736344', '#8a7a55',
-  '#a69470', '#c2af8b', '#decaa6', '#faf4e6',
-]
-
-const retroLightPalette = [
-  '#faf4e6', '#f5ecd8', '#ebe0c4', '#ddd2b0',
-  '#cfc49c', '#c2b088', '#a69470', '#8a7a55',
-  '#6e6040', '#52462d', '#362c1a', '#1a1814',
-]
-
-const retroSemanticColorsLight = {
-  accent: '#d97706', accentLight: '#fef3c7', accentLighter: '#fffbeb',
-  accentDark: '#b45309', accentDarker: '#92400e',
-  accentBorder: '#f59e0b', accentBorderHover: '#d97706',
-  success: '#15803d', successLight: '#dcfce7', successBorder: '#22c55e',
-  error: '#b91c1c', errorLight: '#fee2e2', errorBorder: '#ef4444',
-  warning: '#a16207', warningLight: '#fef9c3', warningBorder: '#eab308',
-  ...labelColors,
-  textInverse: '#faf4e6',
-  skeleton: '#ddd2b0',
-  overlay: 'rgba(26, 24, 20, 0.6)', overlayLight: 'rgba(26, 24, 20, 0.3)',
-  transparent: 'transparent',
-  borderDefault: '#cfc49c', borderMuted: '#ddd2b0', borderStrong: '#a69470', borderFocus: '#d97706',
-  ...retroStyleTokens,
-}
-
-const retroSemanticColorsDark = {
-  accent: '#f59e0b', accentLight: '#451a03', accentLighter: '#2a1000',
-  accentDark: '#fbbf24', accentDarker: '#fcd34d',
-  accentBorder: '#b45309', accentBorderHover: '#f59e0b',
-  success: '#22c55e', successLight: '#052e16', successBorder: '#15803d',
-  error: '#ef4444', errorLight: '#450a0a', errorBorder: '#b91c1c',
-  warning: '#eab308', warningLight: '#422006', warningBorder: '#a16207',
-  ...labelColors,
-  textInverse: '#1a1814',
-  skeleton: '#3d3526',
-  overlay: 'rgba(0, 0, 0, 0.75)', overlayLight: 'rgba(0, 0, 0, 0.5)',
-  transparent: 'transparent',
-  borderDefault: '#4a402d', borderMuted: '#3d3526', borderStrong: '#5c5038', borderFocus: '#f59e0b',
-  ...retroStyleTokens,
-}
-
-// =============================================================================
 // ODYSSEY THEME — flat theme objects merged onto base via spread
 // =============================================================================
 
@@ -561,27 +504,6 @@ const generatedThemes = createThemes({
       },
     },
 
-    retro: {
-      palette: {
-        dark: retroDarkPalette,
-        light: retroLightPalette,
-      },
-      extra: {
-        light: {
-          ...Colors.orange,
-          ...Colors.amber,
-          ...extraColors,
-          ...retroSemanticColorsLight,
-          shadowColor: 'rgba(0, 0, 0, 0.2)',
-        },
-        dark: {
-          ...Colors.orangeDark,
-          ...extraColors,
-          ...retroSemanticColorsDark,
-          shadowColor: 'rgba(0, 0, 0, 0.4)',
-        },
-      },
-    },
   },
 })
 

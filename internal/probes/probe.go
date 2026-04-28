@@ -1,14 +1,8 @@
-// Package probes contains the four probe implementations Vigil uses to test
-// network reachability. Each probe is a stateless object that runs once per
-// monitor cycle and returns a Result.
-//
-// Direct port of src/pingscraper/probes.py from the legacy Python tool, with
-// two improvements:
-//
-//  1. ICMP no longer shells out to `ping` — uses raw ICMP via pro-bing,
-//     bypassing localized ping output and 100ms+ subprocess overhead.
-//  2. All four probes are pure Go socket code, so cross-compilation is clean
-//     and there's no platform-specific subprocess behavior to debug.
+// Package probes contains the four probe implementations Vigil uses to
+// test network reachability. Each probe is stateless, runs once per
+// monitor cycle, and returns a Result. ICMP uses raw ICMP via pro-bing
+// (no shelling out to the system `ping`); TCP/UDP probes are pure Go
+// socket code, so cross-compilation stays clean.
 package probes
 
 import (
@@ -20,6 +14,7 @@ import (
 // Target.kind in db/ent/schema/target.go.
 type Kind string
 
+// Probe Kind values, mirroring the Target.kind enum.
 const (
 	KindICMP    Kind = "icmp"
 	KindTCP     Kind = "tcp"

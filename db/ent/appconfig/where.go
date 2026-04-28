@@ -72,6 +72,11 @@ func RetentionRawDays(v int) predicate.AppConfig {
 	return predicate.AppConfig(sql.FieldEQ(FieldRetentionRawDays, v))
 }
 
+// Retention1minDays applies equality check predicate on the "retention_1min_days" field. It's identical to Retention1minDaysEQ.
+func Retention1minDays(v int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldEQ(FieldRetention1minDays, v))
+}
+
 // Retention5minDays applies equality check predicate on the "retention_5min_days" field. It's identical to Retention5minDaysEQ.
 func Retention5minDays(v int) predicate.AppConfig {
 	return predicate.AppConfig(sql.FieldEQ(FieldRetention5minDays, v))
@@ -240,6 +245,46 @@ func RetentionRawDaysLT(v int) predicate.AppConfig {
 // RetentionRawDaysLTE applies the LTE predicate on the "retention_raw_days" field.
 func RetentionRawDaysLTE(v int) predicate.AppConfig {
 	return predicate.AppConfig(sql.FieldLTE(FieldRetentionRawDays, v))
+}
+
+// Retention1minDaysEQ applies the EQ predicate on the "retention_1min_days" field.
+func Retention1minDaysEQ(v int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldEQ(FieldRetention1minDays, v))
+}
+
+// Retention1minDaysNEQ applies the NEQ predicate on the "retention_1min_days" field.
+func Retention1minDaysNEQ(v int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldNEQ(FieldRetention1minDays, v))
+}
+
+// Retention1minDaysIn applies the In predicate on the "retention_1min_days" field.
+func Retention1minDaysIn(vs ...int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldIn(FieldRetention1minDays, vs...))
+}
+
+// Retention1minDaysNotIn applies the NotIn predicate on the "retention_1min_days" field.
+func Retention1minDaysNotIn(vs ...int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldNotIn(FieldRetention1minDays, vs...))
+}
+
+// Retention1minDaysGT applies the GT predicate on the "retention_1min_days" field.
+func Retention1minDaysGT(v int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldGT(FieldRetention1minDays, v))
+}
+
+// Retention1minDaysGTE applies the GTE predicate on the "retention_1min_days" field.
+func Retention1minDaysGTE(v int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldGTE(FieldRetention1minDays, v))
+}
+
+// Retention1minDaysLT applies the LT predicate on the "retention_1min_days" field.
+func Retention1minDaysLT(v int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldLT(FieldRetention1minDays, v))
+}
+
+// Retention1minDaysLTE applies the LTE predicate on the "retention_1min_days" field.
+func Retention1minDaysLTE(v int) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldLTE(FieldRetention1minDays, v))
 }
 
 // Retention5minDaysEQ applies the EQ predicate on the "retention_5min_days" field.

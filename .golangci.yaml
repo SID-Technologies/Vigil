@@ -53,6 +53,16 @@ linters:
       severity: warning
       enable-all-rules: true
       rules:
+        # 0, 1, 2 aren't magic numbers — they're length-zero checks, counter
+        # inits, singleton IDs, loop bounds. Naming them as constants makes
+        # the code worse, not better. This matches revive's own documented
+        # default for the rule.
+        - name: add-constant
+          arguments:
+            - allow-ints: "0,1,2"
+              allow-floats: "0.0,1.0"
+              allow-strs: '""'
+              max-lit-count: "3"
         - name: file-header
           disabled: true
         - name: max-public-structs
@@ -89,6 +99,39 @@ linters:
     staticcheck:
       checks:
         - all
+
+  # Per-file rule overrides. Tests get extra leeway: literal timestamps,
+  # threshold counts, and fixture RTTs are idiomatic Go test fixtures and
+  # naming each one as a constant fights readability.
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - revive
+        text: "add-constant:"
+      - path: _test\.go
+        linters:
+          - dupl
+          - funlen
+          - gocyclo
+          - gocognit
+      # pkg/errors is a deliberate drop-in replacement for the stdlib errors
+      # package, so the package-name clash is intentional.
+      - path: pkg/errors/.*\.go
+        linters:
+          - revive
+        text: "var-naming: avoid package names that conflict with Go standard library"
+      # pkg/errors itself wraps stdlib errors and github.com/pkg/errors, so
+      # those imports inside the wrapper are intentional.
+      - path: pkg/errors/.*\.go
+        linters:
+          - revive
+        text: "imports-blocklist:"
+      # Ent schemas duplicate by design — codegen requires distinct types per
+      # table, and the field declarations land identical across rollup tiers.
+      - path: db/ent/schema/.*\.go
+        linters:
+          - dupl
 
 issues:
   max-issues-per-linter: 0

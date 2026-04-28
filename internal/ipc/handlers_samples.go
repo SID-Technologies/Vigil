@@ -13,6 +13,7 @@ import (
 const (
 	granularityAuto  = "auto"
 	granularityRaw   = "raw"
+	granularity1Min  = "1min"
 	granularity5min  = "5min"
 	granularity1Hour = "1h"
 )
@@ -31,15 +32,18 @@ type SamplesQueryResponse struct {
 //
 // Granularity dispatch:
 //   - "raw"  : always raw, regardless of window size. Beware: 7 days of raw
-//              for 13 targets is ~3M rows. Frontend should not request raw
-//              over wide windows.
+//     for 13 targets is ~3M rows. Frontend should not request raw
+//     over wide windows.
+//   - "1min" : always 1-min buckets.
 //   - "5min" : always 5-min buckets.
 //   - "1h"   : always 1-hour buckets.
-//   - "auto" : window <= 2h → raw, <= 7d → 5min, > 7d → 1h.
+//   - "auto" : window <= 1h → raw, <= 6h → 1min, <= 7d → 5min, > 7d → 1h.
 func RegisterSampleHandlers(s *Server, client *ent.Client) {
 	s.Register("samples.query", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p querySamplesParams
-		if err := json.Unmarshal(params, &p); err != nil {
+
+		err := json.Unmarshal(params, &p)
+		if err != nil {
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
 
@@ -47,9 +51,11 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 		if p.ToMs == 0 {
 			p.ToMs = now
 		}
+
 		if p.FromMs == 0 {
 			p.FromMs = p.ToMs - 60*60*1000 // default: last hour
 		}
+
 		if p.Limit <= 0 || p.Limit > 50000 {
 			p.Limit = 5000
 		}
@@ -58,6 +64,7 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 		if gran == "" {
 			gran = granularityAuto
 		}
+
 		if gran == granularityAuto {
 			gran = pickGranularity(p.ToMs - p.FromMs)
 		}
@@ -73,7 +80,20 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 			if err != nil {
 				return nil, &Error{Code: "internal", Message: err.Error()}
 			}
+
 			return SamplesQueryResponse{Granularity: granularityRaw, Rows: rows}, nil
+
+		case granularity1Min:
+			rows, err := storage.Query1minSamples(ctx, client, storage.QueryAggregatedParams{
+				FromMs:       p.FromMs,
+				ToMs:         p.ToMs,
+				TargetLabels: p.TargetLabels,
+			})
+			if err != nil {
+				return nil, &Error{Code: "internal", Message: err.Error()}
+			}
+
+			return SamplesQueryResponse{Granularity: granularity1Min, Rows: rows}, nil
 
 		case granularity5min:
 			rows, err := storage.Query5minSamples(ctx, client, storage.QueryAggregatedParams{
@@ -84,6 +104,7 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 			if err != nil {
 				return nil, &Error{Code: "internal", Message: err.Error()}
 			}
+
 			return SamplesQueryResponse{Granularity: granularity5min, Rows: rows}, nil
 
 		case granularity1Hour:
@@ -95,6 +116,7 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 			if err != nil {
 				return nil, &Error{Code: "internal", Message: err.Error()}
 			}
+
 			return SamplesQueryResponse{Granularity: granularity1Hour, Rows: rows}, nil
 
 		default:
@@ -105,12 +127,26 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 
 // pickGranularity is the auto-resolution heuristic. Mirrors the windowing
 // design captured in CLAUDE.md.
+//
+// Boundaries chosen so each tier lands in a "comfortable" point count for
+// recharts: roughly 60–600 points per series across the window.
+//
+//	≤ 1h    → raw (~1440 pts) — fine for short investigations
+//	≤ 6h    → 1-min (60–360 pts)
+//	≤ 7d    → 5-min (288–2016 pts)
+//	> 7d    → 1-hour (168+ pts)
 func pickGranularity(windowMs int64) string {
-	const twoHours = int64(2 * 60 * 60 * 1000)
-	const sevenDays = int64(7 * 24 * 60 * 60 * 1000)
+	const (
+		oneHour   = int64(60 * 60 * 1000)
+		sixHours  = int64(6 * 60 * 60 * 1000)
+		sevenDays = int64(7 * 24 * 60 * 60 * 1000)
+	)
+
 	switch {
-	case windowMs <= twoHours:
+	case windowMs <= oneHour:
 		return granularityRaw
+	case windowMs <= sixHours:
+		return granularity1Min
 	case windowMs <= sevenDays:
 		return granularity5min
 	default:

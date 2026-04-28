@@ -36,6 +36,7 @@ func SampleWifi(ctx context.Context) WifiSample {
 	}
 
 	parseSystemProfilerAirport(string(out), &sample)
+
 	return sample
 }
 
@@ -71,6 +72,7 @@ func parseSystemProfilerAirport(out string, sample *WifiSample) {
 		if line == "" {
 			continue
 		}
+
 		trimmed := strings.TrimLeft(line, " \t")
 		indent := len(line) - len(trimmed)
 
@@ -83,14 +85,18 @@ func parseSystemProfilerAirport(out string, sample *WifiSample) {
 				if next == "" {
 					continue
 				}
+
 				nextTrim := strings.TrimLeft(next, " \t")
+
 				nextIndent := len(next) - len(nextTrim)
 				if nextIndent > currentIndent && strings.HasSuffix(nextTrim, ":") {
 					ssid := strings.TrimSuffix(nextTrim, ":")
 					sample.SSID = strPtr(ssid)
 				}
+
 				break
 			}
+
 			continue
 		}
 
@@ -112,28 +118,34 @@ func parseSystemProfilerAirport(out string, sample *WifiSample) {
 			if rssi != nil {
 				sample.RSSIDbm = rssi
 			}
+		default:
+			// other lines in the block are not interesting to us
 		}
 	}
 }
 
 // parseSignalDbm extracts the signal value from "Signal / Noise: -52 dBm / -90 dBm".
 func parseSignalDbm(line string) *int {
-	idx := strings.Index(line, ":")
-	if idx == -1 {
+	_, after, ok := strings.Cut(line, ":")
+	if !ok {
 		return nil
 	}
-	rest := strings.TrimSpace(line[idx+1:])
+
+	rest := strings.TrimSpace(after)
 	// rest = "-52 dBm / -90 dBm"
 	parts := strings.SplitN(rest, "/", 2)
 	if len(parts) == 0 {
 		return nil
 	}
+
 	first := strings.TrimSpace(parts[0]) // "-52 dBm"
 	first = strings.TrimSuffix(first, "dBm")
 	first = strings.TrimSpace(first)
+
 	v, err := strconv.Atoi(first)
 	if err != nil {
 		return nil
 	}
+
 	return intPtr(v)
 }

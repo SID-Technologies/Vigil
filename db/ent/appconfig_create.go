@@ -75,6 +75,20 @@ func (_c *AppConfigCreate) SetNillableRetentionRawDays(v *int) *AppConfigCreate 
 	return _c
 }
 
+// SetRetention1minDays sets the "retention_1min_days" field.
+func (_c *AppConfigCreate) SetRetention1minDays(v int) *AppConfigCreate {
+	_c.mutation.SetRetention1minDays(v)
+	return _c
+}
+
+// SetNillableRetention1minDays sets the "retention_1min_days" field if the given value is not nil.
+func (_c *AppConfigCreate) SetNillableRetention1minDays(v *int) *AppConfigCreate {
+	if v != nil {
+		_c.SetRetention1minDays(*v)
+	}
+	return _c
+}
+
 // SetRetention5minDays sets the "retention_5min_days" field.
 func (_c *AppConfigCreate) SetRetention5minDays(v int) *AppConfigCreate {
 	_c.mutation.SetRetention5minDays(v)
@@ -160,6 +174,10 @@ func (_c *AppConfigCreate) defaults() {
 		v := appconfig.DefaultRetentionRawDays
 		_c.mutation.SetRetentionRawDays(v)
 	}
+	if _, ok := _c.mutation.Retention1minDays(); !ok {
+		v := appconfig.DefaultRetention1minDays
+		_c.mutation.SetRetention1minDays(v)
+	}
 	if _, ok := _c.mutation.Retention5minDays(); !ok {
 		v := appconfig.DefaultRetention5minDays
 		_c.mutation.SetRetention5minDays(v)
@@ -183,6 +201,9 @@ func (_c *AppConfigCreate) check() error {
 	}
 	if _, ok := _c.mutation.RetentionRawDays(); !ok {
 		return &ValidationError{Name: "retention_raw_days", err: errors.New(`ent: missing required field "AppConfig.retention_raw_days"`)}
+	}
+	if _, ok := _c.mutation.Retention1minDays(); !ok {
+		return &ValidationError{Name: "retention_1min_days", err: errors.New(`ent: missing required field "AppConfig.retention_1min_days"`)}
 	}
 	if _, ok := _c.mutation.Retention5minDays(); !ok {
 		return &ValidationError{Name: "retention_5min_days", err: errors.New(`ent: missing required field "AppConfig.retention_5min_days"`)}
@@ -237,6 +258,10 @@ func (_c *AppConfigCreate) createSpec() (*AppConfig, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RetentionRawDays(); ok {
 		_spec.SetField(appconfig.FieldRetentionRawDays, field.TypeInt, value)
 		_node.RetentionRawDays = value
+	}
+	if value, ok := _c.mutation.Retention1minDays(); ok {
+		_spec.SetField(appconfig.FieldRetention1minDays, field.TypeInt, value)
+		_node.Retention1minDays = value
 	}
 	if value, ok := _c.mutation.Retention5minDays(); ok {
 		_spec.SetField(appconfig.FieldRetention5minDays, field.TypeInt, value)

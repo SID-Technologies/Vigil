@@ -10,7 +10,7 @@ import (
 // Sample is the storage-layer view of a probe result. JSON-serialized
 // directly into IPC responses.
 type Sample struct {
-	TsUnixMs    int64    `json:"ts_unix_ms"`
+	TSUnixMs    int64    `json:"ts_unix_ms"`
 	TargetLabel string   `json:"target_label"`
 	TargetKind  string   `json:"target_kind"`
 	TargetHost  string   `json:"target_host"`
@@ -44,19 +44,20 @@ func QuerySamples(ctx context.Context, client *ent.Client, p QuerySamplesParams)
 	if len(p.TargetLabels) > 0 {
 		q = q.Where(sample.TargetLabelIn(p.TargetLabels...))
 	}
+
 	if p.Limit > 0 {
 		q = q.Limit(p.Limit)
 	}
 
 	rows, err := q.All(ctx)
 	if err != nil {
-		return nil, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
 	}
 
 	out := make([]Sample, 0, len(rows))
 	for _, r := range rows {
 		s := Sample{
-			TsUnixMs:    r.TsUnixMs,
+			TSUnixMs:    r.TsUnixMs,
 			TargetLabel: r.TargetLabel,
 			TargetKind:  r.TargetKind,
 			TargetHost:  r.TargetHost,
@@ -65,13 +66,17 @@ func QuerySamples(ctx context.Context, client *ent.Client, p QuerySamplesParams)
 		if r.TargetPort != nil {
 			s.TargetPort = r.TargetPort
 		}
+
 		if r.RttMs != nil {
 			s.RTTMs = r.RttMs
 		}
+
 		if r.Error != nil {
 			s.Error = r.Error
 		}
+
 		out = append(out, s)
 	}
+
 	return out, nil
 }

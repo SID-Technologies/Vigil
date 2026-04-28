@@ -22,6 +22,7 @@ type WifiSample struct {
 	ent.Schema
 }
 
+// Fields lists the schema fields. Required by Ent's schema interface.
 func (WifiSample) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("ts_unix_ms"),
@@ -52,6 +53,7 @@ func (WifiSample) Fields() []ent.Field {
 	}
 }
 
+// Indexes lists the schema indexes. Required by Ent's schema interface.
 func (WifiSample) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("ts_unix_ms"),

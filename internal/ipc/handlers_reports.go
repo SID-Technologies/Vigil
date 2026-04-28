@@ -9,26 +9,28 @@ import (
 	"github.com/sid-technologies/vigil/internal/reports"
 )
 
-// RegisterReportHandlers wires report.generate. The handler validates window
-// + format inputs, then delegates to reports.Generate which does all the
-// rendering work.
-//
 // Window guard: we cap requests at 90 days to prevent the user from
 // accidentally requesting "last 10 years" and pulling 30M raw rows.
 const maxReportWindowMs int64 = 90 * 24 * 60 * 60 * 1000
 
+// RegisterReportHandlers wires the report.generate IPC method.
 func RegisterReportHandlers(s *Server, client *ent.Client) {
 	s.Register("report.generate", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p reportGenerateParams
-		if err := json.Unmarshal(params, &p); err != nil {
+
+		err := json.Unmarshal(params, &p)
+		if err != nil {
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
+
 		if p.OutDir == "" {
 			return nil, &Error{Code: "invalid_params", Message: "out_dir required"}
 		}
+
 		if p.FromMs == 0 || p.ToMs == 0 || p.ToMs <= p.FromMs {
 			return nil, &Error{Code: "invalid_params", Message: "valid from_ms < to_ms required"}
 		}
+
 		if p.ToMs-p.FromMs > maxReportWindowMs {
 			return nil, &Error{Code: "window_too_large", Message: "max 90 days"}
 		}
@@ -49,12 +51,14 @@ func RegisterReportHandlers(s *Server, client *ent.Client) {
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
+
 		return res, nil
 	})
 }
 
 func parseFormats(in []string) reports.Format {
 	var f reports.Format
+
 	for _, name := range in {
 		switch strings.ToLower(name) {
 		case "csv":
@@ -63,8 +67,11 @@ func parseFormats(in []string) reports.Format {
 			f |= reports.FormatJSON
 		case "html":
 			f |= reports.FormatHTML
+		default:
+			// unknown format names silently ignored
 		}
 	}
+
 	return f
 }
 

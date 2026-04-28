@@ -16,6 +16,7 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/predicate"
 	"github.com/sid-technologies/vigil/db/ent/sample"
 	"github.com/sid-technologies/vigil/db/ent/sample1h"
+	"github.com/sid-technologies/vigil/db/ent/sample1min"
 	"github.com/sid-technologies/vigil/db/ent/sample5min"
 	"github.com/sid-technologies/vigil/db/ent/target"
 	"github.com/sid-technologies/vigil/db/ent/wifisample"
@@ -34,6 +35,7 @@ const (
 	TypeOutage     = "Outage"
 	TypeSample     = "Sample"
 	TypeSample1h   = "Sample1h"
+	TypeSample1min = "Sample1min"
 	TypeSample5min = "Sample5min"
 	TypeTarget     = "Target"
 	TypeWifiSample = "WifiSample"
@@ -53,6 +55,8 @@ type AppConfigMutation struct {
 	addping_timeout_ms     *int
 	retention_raw_days     *int
 	addretention_raw_days  *int
+	retention_1min_days    *int
+	addretention_1min_days *int
 	retention_5min_days    *int
 	addretention_5min_days *int
 	wifi_sample_enabled    *bool
@@ -390,6 +394,62 @@ func (m *AppConfigMutation) ResetRetentionRawDays() {
 	m.addretention_raw_days = nil
 }
 
+// SetRetention1minDays sets the "retention_1min_days" field.
+func (m *AppConfigMutation) SetRetention1minDays(i int) {
+	m.retention_1min_days = &i
+	m.addretention_1min_days = nil
+}
+
+// Retention1minDays returns the value of the "retention_1min_days" field in the mutation.
+func (m *AppConfigMutation) Retention1minDays() (r int, exists bool) {
+	v := m.retention_1min_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetention1minDays returns the old "retention_1min_days" field's value of the AppConfig entity.
+// If the AppConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AppConfigMutation) OldRetention1minDays(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetention1minDays is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetention1minDays requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetention1minDays: %w", err)
+	}
+	return oldValue.Retention1minDays, nil
+}
+
+// AddRetention1minDays adds i to the "retention_1min_days" field.
+func (m *AppConfigMutation) AddRetention1minDays(i int) {
+	if m.addretention_1min_days != nil {
+		*m.addretention_1min_days += i
+	} else {
+		m.addretention_1min_days = &i
+	}
+}
+
+// AddedRetention1minDays returns the value that was added to the "retention_1min_days" field in this mutation.
+func (m *AppConfigMutation) AddedRetention1minDays() (r int, exists bool) {
+	v := m.addretention_1min_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRetention1minDays resets all changes to the "retention_1min_days" field.
+func (m *AppConfigMutation) ResetRetention1minDays() {
+	m.retention_1min_days = nil
+	m.addretention_1min_days = nil
+}
+
 // SetRetention5minDays sets the "retention_5min_days" field.
 func (m *AppConfigMutation) SetRetention5minDays(i int) {
 	m.retention_5min_days = &i
@@ -516,7 +576,7 @@ func (m *AppConfigMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AppConfigMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.ping_interval_sec != nil {
 		fields = append(fields, appconfig.FieldPingIntervalSec)
 	}
@@ -528,6 +588,9 @@ func (m *AppConfigMutation) Fields() []string {
 	}
 	if m.retention_raw_days != nil {
 		fields = append(fields, appconfig.FieldRetentionRawDays)
+	}
+	if m.retention_1min_days != nil {
+		fields = append(fields, appconfig.FieldRetention1minDays)
 	}
 	if m.retention_5min_days != nil {
 		fields = append(fields, appconfig.FieldRetention5minDays)
@@ -551,6 +614,8 @@ func (m *AppConfigMutation) Field(name string) (ent.Value, bool) {
 		return m.PingTimeoutMs()
 	case appconfig.FieldRetentionRawDays:
 		return m.RetentionRawDays()
+	case appconfig.FieldRetention1minDays:
+		return m.Retention1minDays()
 	case appconfig.FieldRetention5minDays:
 		return m.Retention5minDays()
 	case appconfig.FieldWifiSampleEnabled:
@@ -572,6 +637,8 @@ func (m *AppConfigMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldPingTimeoutMs(ctx)
 	case appconfig.FieldRetentionRawDays:
 		return m.OldRetentionRawDays(ctx)
+	case appconfig.FieldRetention1minDays:
+		return m.OldRetention1minDays(ctx)
 	case appconfig.FieldRetention5minDays:
 		return m.OldRetention5minDays(ctx)
 	case appconfig.FieldWifiSampleEnabled:
@@ -613,6 +680,13 @@ func (m *AppConfigMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRetentionRawDays(v)
 		return nil
+	case appconfig.FieldRetention1minDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetention1minDays(v)
+		return nil
 	case appconfig.FieldRetention5minDays:
 		v, ok := value.(int)
 		if !ok {
@@ -647,6 +721,9 @@ func (m *AppConfigMutation) AddedFields() []string {
 	if m.addretention_raw_days != nil {
 		fields = append(fields, appconfig.FieldRetentionRawDays)
 	}
+	if m.addretention_1min_days != nil {
+		fields = append(fields, appconfig.FieldRetention1minDays)
+	}
 	if m.addretention_5min_days != nil {
 		fields = append(fields, appconfig.FieldRetention5minDays)
 	}
@@ -666,6 +743,8 @@ func (m *AppConfigMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPingTimeoutMs()
 	case appconfig.FieldRetentionRawDays:
 		return m.AddedRetentionRawDays()
+	case appconfig.FieldRetention1minDays:
+		return m.AddedRetention1minDays()
 	case appconfig.FieldRetention5minDays:
 		return m.AddedRetention5minDays()
 	}
@@ -704,6 +783,13 @@ func (m *AppConfigMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRetentionRawDays(v)
+		return nil
+	case appconfig.FieldRetention1minDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRetention1minDays(v)
 		return nil
 	case appconfig.FieldRetention5minDays:
 		v, ok := value.(int)
@@ -750,6 +836,9 @@ func (m *AppConfigMutation) ResetField(name string) error {
 		return nil
 	case appconfig.FieldRetentionRawDays:
 		m.ResetRetentionRawDays()
+		return nil
+	case appconfig.FieldRetention1minDays:
+		m.ResetRetention1minDays()
 		return nil
 	case appconfig.FieldRetention5minDays:
 		m.ResetRetention5minDays()
@@ -3816,6 +3905,1401 @@ func (m *Sample1hMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *Sample1hMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Sample1h edge %s", name)
+}
+
+// Sample1minMutation represents an operation that mutates the Sample1min nodes in the graph.
+type Sample1minMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *int
+	bucket_start_unix_ms    *int64
+	addbucket_start_unix_ms *int64
+	target_label            *string
+	count                   *int
+	addcount                *int
+	success_count           *int
+	addsuccess_count        *int
+	fail_count              *int
+	addfail_count           *int
+	rtt_p50_ms              *float64
+	addrtt_p50_ms           *float64
+	rtt_p95_ms              *float64
+	addrtt_p95_ms           *float64
+	rtt_p99_ms              *float64
+	addrtt_p99_ms           *float64
+	rtt_max_ms              *float64
+	addrtt_max_ms           *float64
+	rtt_mean_ms             *float64
+	addrtt_mean_ms          *float64
+	jitter_ms               *float64
+	addjitter_ms            *float64
+	errors                  *map[string]int
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*Sample1min, error)
+	predicates              []predicate.Sample1min
+}
+
+var _ ent.Mutation = (*Sample1minMutation)(nil)
+
+// sample1minOption allows management of the mutation configuration using functional options.
+type sample1minOption func(*Sample1minMutation)
+
+// newSample1minMutation creates new mutation for the Sample1min entity.
+func newSample1minMutation(c config, op Op, opts ...sample1minOption) *Sample1minMutation {
+	m := &Sample1minMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSample1min,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSample1minID sets the ID field of the mutation.
+func withSample1minID(id int) sample1minOption {
+	return func(m *Sample1minMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Sample1min
+		)
+		m.oldValue = func(ctx context.Context) (*Sample1min, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Sample1min.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSample1min sets the old Sample1min of the mutation.
+func withSample1min(node *Sample1min) sample1minOption {
+	return func(m *Sample1minMutation) {
+		m.oldValue = func(context.Context) (*Sample1min, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m Sample1minMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m Sample1minMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *Sample1minMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *Sample1minMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Sample1min.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetBucketStartUnixMs sets the "bucket_start_unix_ms" field.
+func (m *Sample1minMutation) SetBucketStartUnixMs(i int64) {
+	m.bucket_start_unix_ms = &i
+	m.addbucket_start_unix_ms = nil
+}
+
+// BucketStartUnixMs returns the value of the "bucket_start_unix_ms" field in the mutation.
+func (m *Sample1minMutation) BucketStartUnixMs() (r int64, exists bool) {
+	v := m.bucket_start_unix_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBucketStartUnixMs returns the old "bucket_start_unix_ms" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldBucketStartUnixMs(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBucketStartUnixMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBucketStartUnixMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBucketStartUnixMs: %w", err)
+	}
+	return oldValue.BucketStartUnixMs, nil
+}
+
+// AddBucketStartUnixMs adds i to the "bucket_start_unix_ms" field.
+func (m *Sample1minMutation) AddBucketStartUnixMs(i int64) {
+	if m.addbucket_start_unix_ms != nil {
+		*m.addbucket_start_unix_ms += i
+	} else {
+		m.addbucket_start_unix_ms = &i
+	}
+}
+
+// AddedBucketStartUnixMs returns the value that was added to the "bucket_start_unix_ms" field in this mutation.
+func (m *Sample1minMutation) AddedBucketStartUnixMs() (r int64, exists bool) {
+	v := m.addbucket_start_unix_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBucketStartUnixMs resets all changes to the "bucket_start_unix_ms" field.
+func (m *Sample1minMutation) ResetBucketStartUnixMs() {
+	m.bucket_start_unix_ms = nil
+	m.addbucket_start_unix_ms = nil
+}
+
+// SetTargetLabel sets the "target_label" field.
+func (m *Sample1minMutation) SetTargetLabel(s string) {
+	m.target_label = &s
+}
+
+// TargetLabel returns the value of the "target_label" field in the mutation.
+func (m *Sample1minMutation) TargetLabel() (r string, exists bool) {
+	v := m.target_label
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetLabel returns the old "target_label" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldTargetLabel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetLabel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetLabel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetLabel: %w", err)
+	}
+	return oldValue.TargetLabel, nil
+}
+
+// ResetTargetLabel resets all changes to the "target_label" field.
+func (m *Sample1minMutation) ResetTargetLabel() {
+	m.target_label = nil
+}
+
+// SetCount sets the "count" field.
+func (m *Sample1minMutation) SetCount(i int) {
+	m.count = &i
+	m.addcount = nil
+}
+
+// Count returns the value of the "count" field in the mutation.
+func (m *Sample1minMutation) Count() (r int, exists bool) {
+	v := m.count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCount returns the old "count" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCount: %w", err)
+	}
+	return oldValue.Count, nil
+}
+
+// AddCount adds i to the "count" field.
+func (m *Sample1minMutation) AddCount(i int) {
+	if m.addcount != nil {
+		*m.addcount += i
+	} else {
+		m.addcount = &i
+	}
+}
+
+// AddedCount returns the value that was added to the "count" field in this mutation.
+func (m *Sample1minMutation) AddedCount() (r int, exists bool) {
+	v := m.addcount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCount resets all changes to the "count" field.
+func (m *Sample1minMutation) ResetCount() {
+	m.count = nil
+	m.addcount = nil
+}
+
+// SetSuccessCount sets the "success_count" field.
+func (m *Sample1minMutation) SetSuccessCount(i int) {
+	m.success_count = &i
+	m.addsuccess_count = nil
+}
+
+// SuccessCount returns the value of the "success_count" field in the mutation.
+func (m *Sample1minMutation) SuccessCount() (r int, exists bool) {
+	v := m.success_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSuccessCount returns the old "success_count" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldSuccessCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSuccessCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSuccessCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSuccessCount: %w", err)
+	}
+	return oldValue.SuccessCount, nil
+}
+
+// AddSuccessCount adds i to the "success_count" field.
+func (m *Sample1minMutation) AddSuccessCount(i int) {
+	if m.addsuccess_count != nil {
+		*m.addsuccess_count += i
+	} else {
+		m.addsuccess_count = &i
+	}
+}
+
+// AddedSuccessCount returns the value that was added to the "success_count" field in this mutation.
+func (m *Sample1minMutation) AddedSuccessCount() (r int, exists bool) {
+	v := m.addsuccess_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSuccessCount resets all changes to the "success_count" field.
+func (m *Sample1minMutation) ResetSuccessCount() {
+	m.success_count = nil
+	m.addsuccess_count = nil
+}
+
+// SetFailCount sets the "fail_count" field.
+func (m *Sample1minMutation) SetFailCount(i int) {
+	m.fail_count = &i
+	m.addfail_count = nil
+}
+
+// FailCount returns the value of the "fail_count" field in the mutation.
+func (m *Sample1minMutation) FailCount() (r int, exists bool) {
+	v := m.fail_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailCount returns the old "fail_count" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldFailCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailCount: %w", err)
+	}
+	return oldValue.FailCount, nil
+}
+
+// AddFailCount adds i to the "fail_count" field.
+func (m *Sample1minMutation) AddFailCount(i int) {
+	if m.addfail_count != nil {
+		*m.addfail_count += i
+	} else {
+		m.addfail_count = &i
+	}
+}
+
+// AddedFailCount returns the value that was added to the "fail_count" field in this mutation.
+func (m *Sample1minMutation) AddedFailCount() (r int, exists bool) {
+	v := m.addfail_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetFailCount resets all changes to the "fail_count" field.
+func (m *Sample1minMutation) ResetFailCount() {
+	m.fail_count = nil
+	m.addfail_count = nil
+}
+
+// SetRttP50Ms sets the "rtt_p50_ms" field.
+func (m *Sample1minMutation) SetRttP50Ms(f float64) {
+	m.rtt_p50_ms = &f
+	m.addrtt_p50_ms = nil
+}
+
+// RttP50Ms returns the value of the "rtt_p50_ms" field in the mutation.
+func (m *Sample1minMutation) RttP50Ms() (r float64, exists bool) {
+	v := m.rtt_p50_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRttP50Ms returns the old "rtt_p50_ms" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldRttP50Ms(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRttP50Ms is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRttP50Ms requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRttP50Ms: %w", err)
+	}
+	return oldValue.RttP50Ms, nil
+}
+
+// AddRttP50Ms adds f to the "rtt_p50_ms" field.
+func (m *Sample1minMutation) AddRttP50Ms(f float64) {
+	if m.addrtt_p50_ms != nil {
+		*m.addrtt_p50_ms += f
+	} else {
+		m.addrtt_p50_ms = &f
+	}
+}
+
+// AddedRttP50Ms returns the value that was added to the "rtt_p50_ms" field in this mutation.
+func (m *Sample1minMutation) AddedRttP50Ms() (r float64, exists bool) {
+	v := m.addrtt_p50_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRttP50Ms clears the value of the "rtt_p50_ms" field.
+func (m *Sample1minMutation) ClearRttP50Ms() {
+	m.rtt_p50_ms = nil
+	m.addrtt_p50_ms = nil
+	m.clearedFields[sample1min.FieldRttP50Ms] = struct{}{}
+}
+
+// RttP50MsCleared returns if the "rtt_p50_ms" field was cleared in this mutation.
+func (m *Sample1minMutation) RttP50MsCleared() bool {
+	_, ok := m.clearedFields[sample1min.FieldRttP50Ms]
+	return ok
+}
+
+// ResetRttP50Ms resets all changes to the "rtt_p50_ms" field.
+func (m *Sample1minMutation) ResetRttP50Ms() {
+	m.rtt_p50_ms = nil
+	m.addrtt_p50_ms = nil
+	delete(m.clearedFields, sample1min.FieldRttP50Ms)
+}
+
+// SetRttP95Ms sets the "rtt_p95_ms" field.
+func (m *Sample1minMutation) SetRttP95Ms(f float64) {
+	m.rtt_p95_ms = &f
+	m.addrtt_p95_ms = nil
+}
+
+// RttP95Ms returns the value of the "rtt_p95_ms" field in the mutation.
+func (m *Sample1minMutation) RttP95Ms() (r float64, exists bool) {
+	v := m.rtt_p95_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRttP95Ms returns the old "rtt_p95_ms" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldRttP95Ms(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRttP95Ms is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRttP95Ms requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRttP95Ms: %w", err)
+	}
+	return oldValue.RttP95Ms, nil
+}
+
+// AddRttP95Ms adds f to the "rtt_p95_ms" field.
+func (m *Sample1minMutation) AddRttP95Ms(f float64) {
+	if m.addrtt_p95_ms != nil {
+		*m.addrtt_p95_ms += f
+	} else {
+		m.addrtt_p95_ms = &f
+	}
+}
+
+// AddedRttP95Ms returns the value that was added to the "rtt_p95_ms" field in this mutation.
+func (m *Sample1minMutation) AddedRttP95Ms() (r float64, exists bool) {
+	v := m.addrtt_p95_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRttP95Ms clears the value of the "rtt_p95_ms" field.
+func (m *Sample1minMutation) ClearRttP95Ms() {
+	m.rtt_p95_ms = nil
+	m.addrtt_p95_ms = nil
+	m.clearedFields[sample1min.FieldRttP95Ms] = struct{}{}
+}
+
+// RttP95MsCleared returns if the "rtt_p95_ms" field was cleared in this mutation.
+func (m *Sample1minMutation) RttP95MsCleared() bool {
+	_, ok := m.clearedFields[sample1min.FieldRttP95Ms]
+	return ok
+}
+
+// ResetRttP95Ms resets all changes to the "rtt_p95_ms" field.
+func (m *Sample1minMutation) ResetRttP95Ms() {
+	m.rtt_p95_ms = nil
+	m.addrtt_p95_ms = nil
+	delete(m.clearedFields, sample1min.FieldRttP95Ms)
+}
+
+// SetRttP99Ms sets the "rtt_p99_ms" field.
+func (m *Sample1minMutation) SetRttP99Ms(f float64) {
+	m.rtt_p99_ms = &f
+	m.addrtt_p99_ms = nil
+}
+
+// RttP99Ms returns the value of the "rtt_p99_ms" field in the mutation.
+func (m *Sample1minMutation) RttP99Ms() (r float64, exists bool) {
+	v := m.rtt_p99_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRttP99Ms returns the old "rtt_p99_ms" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldRttP99Ms(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRttP99Ms is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRttP99Ms requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRttP99Ms: %w", err)
+	}
+	return oldValue.RttP99Ms, nil
+}
+
+// AddRttP99Ms adds f to the "rtt_p99_ms" field.
+func (m *Sample1minMutation) AddRttP99Ms(f float64) {
+	if m.addrtt_p99_ms != nil {
+		*m.addrtt_p99_ms += f
+	} else {
+		m.addrtt_p99_ms = &f
+	}
+}
+
+// AddedRttP99Ms returns the value that was added to the "rtt_p99_ms" field in this mutation.
+func (m *Sample1minMutation) AddedRttP99Ms() (r float64, exists bool) {
+	v := m.addrtt_p99_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRttP99Ms clears the value of the "rtt_p99_ms" field.
+func (m *Sample1minMutation) ClearRttP99Ms() {
+	m.rtt_p99_ms = nil
+	m.addrtt_p99_ms = nil
+	m.clearedFields[sample1min.FieldRttP99Ms] = struct{}{}
+}
+
+// RttP99MsCleared returns if the "rtt_p99_ms" field was cleared in this mutation.
+func (m *Sample1minMutation) RttP99MsCleared() bool {
+	_, ok := m.clearedFields[sample1min.FieldRttP99Ms]
+	return ok
+}
+
+// ResetRttP99Ms resets all changes to the "rtt_p99_ms" field.
+func (m *Sample1minMutation) ResetRttP99Ms() {
+	m.rtt_p99_ms = nil
+	m.addrtt_p99_ms = nil
+	delete(m.clearedFields, sample1min.FieldRttP99Ms)
+}
+
+// SetRttMaxMs sets the "rtt_max_ms" field.
+func (m *Sample1minMutation) SetRttMaxMs(f float64) {
+	m.rtt_max_ms = &f
+	m.addrtt_max_ms = nil
+}
+
+// RttMaxMs returns the value of the "rtt_max_ms" field in the mutation.
+func (m *Sample1minMutation) RttMaxMs() (r float64, exists bool) {
+	v := m.rtt_max_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRttMaxMs returns the old "rtt_max_ms" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldRttMaxMs(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRttMaxMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRttMaxMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRttMaxMs: %w", err)
+	}
+	return oldValue.RttMaxMs, nil
+}
+
+// AddRttMaxMs adds f to the "rtt_max_ms" field.
+func (m *Sample1minMutation) AddRttMaxMs(f float64) {
+	if m.addrtt_max_ms != nil {
+		*m.addrtt_max_ms += f
+	} else {
+		m.addrtt_max_ms = &f
+	}
+}
+
+// AddedRttMaxMs returns the value that was added to the "rtt_max_ms" field in this mutation.
+func (m *Sample1minMutation) AddedRttMaxMs() (r float64, exists bool) {
+	v := m.addrtt_max_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRttMaxMs clears the value of the "rtt_max_ms" field.
+func (m *Sample1minMutation) ClearRttMaxMs() {
+	m.rtt_max_ms = nil
+	m.addrtt_max_ms = nil
+	m.clearedFields[sample1min.FieldRttMaxMs] = struct{}{}
+}
+
+// RttMaxMsCleared returns if the "rtt_max_ms" field was cleared in this mutation.
+func (m *Sample1minMutation) RttMaxMsCleared() bool {
+	_, ok := m.clearedFields[sample1min.FieldRttMaxMs]
+	return ok
+}
+
+// ResetRttMaxMs resets all changes to the "rtt_max_ms" field.
+func (m *Sample1minMutation) ResetRttMaxMs() {
+	m.rtt_max_ms = nil
+	m.addrtt_max_ms = nil
+	delete(m.clearedFields, sample1min.FieldRttMaxMs)
+}
+
+// SetRttMeanMs sets the "rtt_mean_ms" field.
+func (m *Sample1minMutation) SetRttMeanMs(f float64) {
+	m.rtt_mean_ms = &f
+	m.addrtt_mean_ms = nil
+}
+
+// RttMeanMs returns the value of the "rtt_mean_ms" field in the mutation.
+func (m *Sample1minMutation) RttMeanMs() (r float64, exists bool) {
+	v := m.rtt_mean_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRttMeanMs returns the old "rtt_mean_ms" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldRttMeanMs(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRttMeanMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRttMeanMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRttMeanMs: %w", err)
+	}
+	return oldValue.RttMeanMs, nil
+}
+
+// AddRttMeanMs adds f to the "rtt_mean_ms" field.
+func (m *Sample1minMutation) AddRttMeanMs(f float64) {
+	if m.addrtt_mean_ms != nil {
+		*m.addrtt_mean_ms += f
+	} else {
+		m.addrtt_mean_ms = &f
+	}
+}
+
+// AddedRttMeanMs returns the value that was added to the "rtt_mean_ms" field in this mutation.
+func (m *Sample1minMutation) AddedRttMeanMs() (r float64, exists bool) {
+	v := m.addrtt_mean_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRttMeanMs clears the value of the "rtt_mean_ms" field.
+func (m *Sample1minMutation) ClearRttMeanMs() {
+	m.rtt_mean_ms = nil
+	m.addrtt_mean_ms = nil
+	m.clearedFields[sample1min.FieldRttMeanMs] = struct{}{}
+}
+
+// RttMeanMsCleared returns if the "rtt_mean_ms" field was cleared in this mutation.
+func (m *Sample1minMutation) RttMeanMsCleared() bool {
+	_, ok := m.clearedFields[sample1min.FieldRttMeanMs]
+	return ok
+}
+
+// ResetRttMeanMs resets all changes to the "rtt_mean_ms" field.
+func (m *Sample1minMutation) ResetRttMeanMs() {
+	m.rtt_mean_ms = nil
+	m.addrtt_mean_ms = nil
+	delete(m.clearedFields, sample1min.FieldRttMeanMs)
+}
+
+// SetJitterMs sets the "jitter_ms" field.
+func (m *Sample1minMutation) SetJitterMs(f float64) {
+	m.jitter_ms = &f
+	m.addjitter_ms = nil
+}
+
+// JitterMs returns the value of the "jitter_ms" field in the mutation.
+func (m *Sample1minMutation) JitterMs() (r float64, exists bool) {
+	v := m.jitter_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJitterMs returns the old "jitter_ms" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldJitterMs(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJitterMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJitterMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJitterMs: %w", err)
+	}
+	return oldValue.JitterMs, nil
+}
+
+// AddJitterMs adds f to the "jitter_ms" field.
+func (m *Sample1minMutation) AddJitterMs(f float64) {
+	if m.addjitter_ms != nil {
+		*m.addjitter_ms += f
+	} else {
+		m.addjitter_ms = &f
+	}
+}
+
+// AddedJitterMs returns the value that was added to the "jitter_ms" field in this mutation.
+func (m *Sample1minMutation) AddedJitterMs() (r float64, exists bool) {
+	v := m.addjitter_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearJitterMs clears the value of the "jitter_ms" field.
+func (m *Sample1minMutation) ClearJitterMs() {
+	m.jitter_ms = nil
+	m.addjitter_ms = nil
+	m.clearedFields[sample1min.FieldJitterMs] = struct{}{}
+}
+
+// JitterMsCleared returns if the "jitter_ms" field was cleared in this mutation.
+func (m *Sample1minMutation) JitterMsCleared() bool {
+	_, ok := m.clearedFields[sample1min.FieldJitterMs]
+	return ok
+}
+
+// ResetJitterMs resets all changes to the "jitter_ms" field.
+func (m *Sample1minMutation) ResetJitterMs() {
+	m.jitter_ms = nil
+	m.addjitter_ms = nil
+	delete(m.clearedFields, sample1min.FieldJitterMs)
+}
+
+// SetErrors sets the "errors" field.
+func (m *Sample1minMutation) SetErrors(value map[string]int) {
+	m.errors = &value
+}
+
+// Errors returns the value of the "errors" field in the mutation.
+func (m *Sample1minMutation) Errors() (r map[string]int, exists bool) {
+	v := m.errors
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrors returns the old "errors" field's value of the Sample1min entity.
+// If the Sample1min object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *Sample1minMutation) OldErrors(ctx context.Context) (v map[string]int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrors is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrors requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrors: %w", err)
+	}
+	return oldValue.Errors, nil
+}
+
+// ClearErrors clears the value of the "errors" field.
+func (m *Sample1minMutation) ClearErrors() {
+	m.errors = nil
+	m.clearedFields[sample1min.FieldErrors] = struct{}{}
+}
+
+// ErrorsCleared returns if the "errors" field was cleared in this mutation.
+func (m *Sample1minMutation) ErrorsCleared() bool {
+	_, ok := m.clearedFields[sample1min.FieldErrors]
+	return ok
+}
+
+// ResetErrors resets all changes to the "errors" field.
+func (m *Sample1minMutation) ResetErrors() {
+	m.errors = nil
+	delete(m.clearedFields, sample1min.FieldErrors)
+}
+
+// Where appends a list predicates to the Sample1minMutation builder.
+func (m *Sample1minMutation) Where(ps ...predicate.Sample1min) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the Sample1minMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *Sample1minMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Sample1min, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *Sample1minMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *Sample1minMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Sample1min).
+func (m *Sample1minMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *Sample1minMutation) Fields() []string {
+	fields := make([]string, 0, 12)
+	if m.bucket_start_unix_ms != nil {
+		fields = append(fields, sample1min.FieldBucketStartUnixMs)
+	}
+	if m.target_label != nil {
+		fields = append(fields, sample1min.FieldTargetLabel)
+	}
+	if m.count != nil {
+		fields = append(fields, sample1min.FieldCount)
+	}
+	if m.success_count != nil {
+		fields = append(fields, sample1min.FieldSuccessCount)
+	}
+	if m.fail_count != nil {
+		fields = append(fields, sample1min.FieldFailCount)
+	}
+	if m.rtt_p50_ms != nil {
+		fields = append(fields, sample1min.FieldRttP50Ms)
+	}
+	if m.rtt_p95_ms != nil {
+		fields = append(fields, sample1min.FieldRttP95Ms)
+	}
+	if m.rtt_p99_ms != nil {
+		fields = append(fields, sample1min.FieldRttP99Ms)
+	}
+	if m.rtt_max_ms != nil {
+		fields = append(fields, sample1min.FieldRttMaxMs)
+	}
+	if m.rtt_mean_ms != nil {
+		fields = append(fields, sample1min.FieldRttMeanMs)
+	}
+	if m.jitter_ms != nil {
+		fields = append(fields, sample1min.FieldJitterMs)
+	}
+	if m.errors != nil {
+		fields = append(fields, sample1min.FieldErrors)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *Sample1minMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case sample1min.FieldBucketStartUnixMs:
+		return m.BucketStartUnixMs()
+	case sample1min.FieldTargetLabel:
+		return m.TargetLabel()
+	case sample1min.FieldCount:
+		return m.Count()
+	case sample1min.FieldSuccessCount:
+		return m.SuccessCount()
+	case sample1min.FieldFailCount:
+		return m.FailCount()
+	case sample1min.FieldRttP50Ms:
+		return m.RttP50Ms()
+	case sample1min.FieldRttP95Ms:
+		return m.RttP95Ms()
+	case sample1min.FieldRttP99Ms:
+		return m.RttP99Ms()
+	case sample1min.FieldRttMaxMs:
+		return m.RttMaxMs()
+	case sample1min.FieldRttMeanMs:
+		return m.RttMeanMs()
+	case sample1min.FieldJitterMs:
+		return m.JitterMs()
+	case sample1min.FieldErrors:
+		return m.Errors()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *Sample1minMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case sample1min.FieldBucketStartUnixMs:
+		return m.OldBucketStartUnixMs(ctx)
+	case sample1min.FieldTargetLabel:
+		return m.OldTargetLabel(ctx)
+	case sample1min.FieldCount:
+		return m.OldCount(ctx)
+	case sample1min.FieldSuccessCount:
+		return m.OldSuccessCount(ctx)
+	case sample1min.FieldFailCount:
+		return m.OldFailCount(ctx)
+	case sample1min.FieldRttP50Ms:
+		return m.OldRttP50Ms(ctx)
+	case sample1min.FieldRttP95Ms:
+		return m.OldRttP95Ms(ctx)
+	case sample1min.FieldRttP99Ms:
+		return m.OldRttP99Ms(ctx)
+	case sample1min.FieldRttMaxMs:
+		return m.OldRttMaxMs(ctx)
+	case sample1min.FieldRttMeanMs:
+		return m.OldRttMeanMs(ctx)
+	case sample1min.FieldJitterMs:
+		return m.OldJitterMs(ctx)
+	case sample1min.FieldErrors:
+		return m.OldErrors(ctx)
+	}
+	return nil, fmt.Errorf("unknown Sample1min field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *Sample1minMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case sample1min.FieldBucketStartUnixMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBucketStartUnixMs(v)
+		return nil
+	case sample1min.FieldTargetLabel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetLabel(v)
+		return nil
+	case sample1min.FieldCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCount(v)
+		return nil
+	case sample1min.FieldSuccessCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSuccessCount(v)
+		return nil
+	case sample1min.FieldFailCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailCount(v)
+		return nil
+	case sample1min.FieldRttP50Ms:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRttP50Ms(v)
+		return nil
+	case sample1min.FieldRttP95Ms:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRttP95Ms(v)
+		return nil
+	case sample1min.FieldRttP99Ms:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRttP99Ms(v)
+		return nil
+	case sample1min.FieldRttMaxMs:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRttMaxMs(v)
+		return nil
+	case sample1min.FieldRttMeanMs:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRttMeanMs(v)
+		return nil
+	case sample1min.FieldJitterMs:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJitterMs(v)
+		return nil
+	case sample1min.FieldErrors:
+		v, ok := value.(map[string]int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrors(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Sample1min field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *Sample1minMutation) AddedFields() []string {
+	var fields []string
+	if m.addbucket_start_unix_ms != nil {
+		fields = append(fields, sample1min.FieldBucketStartUnixMs)
+	}
+	if m.addcount != nil {
+		fields = append(fields, sample1min.FieldCount)
+	}
+	if m.addsuccess_count != nil {
+		fields = append(fields, sample1min.FieldSuccessCount)
+	}
+	if m.addfail_count != nil {
+		fields = append(fields, sample1min.FieldFailCount)
+	}
+	if m.addrtt_p50_ms != nil {
+		fields = append(fields, sample1min.FieldRttP50Ms)
+	}
+	if m.addrtt_p95_ms != nil {
+		fields = append(fields, sample1min.FieldRttP95Ms)
+	}
+	if m.addrtt_p99_ms != nil {
+		fields = append(fields, sample1min.FieldRttP99Ms)
+	}
+	if m.addrtt_max_ms != nil {
+		fields = append(fields, sample1min.FieldRttMaxMs)
+	}
+	if m.addrtt_mean_ms != nil {
+		fields = append(fields, sample1min.FieldRttMeanMs)
+	}
+	if m.addjitter_ms != nil {
+		fields = append(fields, sample1min.FieldJitterMs)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *Sample1minMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case sample1min.FieldBucketStartUnixMs:
+		return m.AddedBucketStartUnixMs()
+	case sample1min.FieldCount:
+		return m.AddedCount()
+	case sample1min.FieldSuccessCount:
+		return m.AddedSuccessCount()
+	case sample1min.FieldFailCount:
+		return m.AddedFailCount()
+	case sample1min.FieldRttP50Ms:
+		return m.AddedRttP50Ms()
+	case sample1min.FieldRttP95Ms:
+		return m.AddedRttP95Ms()
+	case sample1min.FieldRttP99Ms:
+		return m.AddedRttP99Ms()
+	case sample1min.FieldRttMaxMs:
+		return m.AddedRttMaxMs()
+	case sample1min.FieldRttMeanMs:
+		return m.AddedRttMeanMs()
+	case sample1min.FieldJitterMs:
+		return m.AddedJitterMs()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *Sample1minMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case sample1min.FieldBucketStartUnixMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBucketStartUnixMs(v)
+		return nil
+	case sample1min.FieldCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCount(v)
+		return nil
+	case sample1min.FieldSuccessCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSuccessCount(v)
+		return nil
+	case sample1min.FieldFailCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddFailCount(v)
+		return nil
+	case sample1min.FieldRttP50Ms:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRttP50Ms(v)
+		return nil
+	case sample1min.FieldRttP95Ms:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRttP95Ms(v)
+		return nil
+	case sample1min.FieldRttP99Ms:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRttP99Ms(v)
+		return nil
+	case sample1min.FieldRttMaxMs:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRttMaxMs(v)
+		return nil
+	case sample1min.FieldRttMeanMs:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRttMeanMs(v)
+		return nil
+	case sample1min.FieldJitterMs:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddJitterMs(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Sample1min numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *Sample1minMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(sample1min.FieldRttP50Ms) {
+		fields = append(fields, sample1min.FieldRttP50Ms)
+	}
+	if m.FieldCleared(sample1min.FieldRttP95Ms) {
+		fields = append(fields, sample1min.FieldRttP95Ms)
+	}
+	if m.FieldCleared(sample1min.FieldRttP99Ms) {
+		fields = append(fields, sample1min.FieldRttP99Ms)
+	}
+	if m.FieldCleared(sample1min.FieldRttMaxMs) {
+		fields = append(fields, sample1min.FieldRttMaxMs)
+	}
+	if m.FieldCleared(sample1min.FieldRttMeanMs) {
+		fields = append(fields, sample1min.FieldRttMeanMs)
+	}
+	if m.FieldCleared(sample1min.FieldJitterMs) {
+		fields = append(fields, sample1min.FieldJitterMs)
+	}
+	if m.FieldCleared(sample1min.FieldErrors) {
+		fields = append(fields, sample1min.FieldErrors)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *Sample1minMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *Sample1minMutation) ClearField(name string) error {
+	switch name {
+	case sample1min.FieldRttP50Ms:
+		m.ClearRttP50Ms()
+		return nil
+	case sample1min.FieldRttP95Ms:
+		m.ClearRttP95Ms()
+		return nil
+	case sample1min.FieldRttP99Ms:
+		m.ClearRttP99Ms()
+		return nil
+	case sample1min.FieldRttMaxMs:
+		m.ClearRttMaxMs()
+		return nil
+	case sample1min.FieldRttMeanMs:
+		m.ClearRttMeanMs()
+		return nil
+	case sample1min.FieldJitterMs:
+		m.ClearJitterMs()
+		return nil
+	case sample1min.FieldErrors:
+		m.ClearErrors()
+		return nil
+	}
+	return fmt.Errorf("unknown Sample1min nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *Sample1minMutation) ResetField(name string) error {
+	switch name {
+	case sample1min.FieldBucketStartUnixMs:
+		m.ResetBucketStartUnixMs()
+		return nil
+	case sample1min.FieldTargetLabel:
+		m.ResetTargetLabel()
+		return nil
+	case sample1min.FieldCount:
+		m.ResetCount()
+		return nil
+	case sample1min.FieldSuccessCount:
+		m.ResetSuccessCount()
+		return nil
+	case sample1min.FieldFailCount:
+		m.ResetFailCount()
+		return nil
+	case sample1min.FieldRttP50Ms:
+		m.ResetRttP50Ms()
+		return nil
+	case sample1min.FieldRttP95Ms:
+		m.ResetRttP95Ms()
+		return nil
+	case sample1min.FieldRttP99Ms:
+		m.ResetRttP99Ms()
+		return nil
+	case sample1min.FieldRttMaxMs:
+		m.ResetRttMaxMs()
+		return nil
+	case sample1min.FieldRttMeanMs:
+		m.ResetRttMeanMs()
+		return nil
+	case sample1min.FieldJitterMs:
+		m.ResetJitterMs()
+		return nil
+	case sample1min.FieldErrors:
+		m.ResetErrors()
+		return nil
+	}
+	return fmt.Errorf("unknown Sample1min field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *Sample1minMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *Sample1minMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *Sample1minMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *Sample1minMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *Sample1minMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *Sample1minMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *Sample1minMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown Sample1min unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *Sample1minMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown Sample1min edge %s", name)
 }
 
 // Sample5minMutation represents an operation that mutates the Sample5min nodes in the graph.

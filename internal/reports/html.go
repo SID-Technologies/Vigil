@@ -7,6 +7,8 @@ import (
 	"html/template"
 	"os"
 	"strings"
+
+	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
 //go:embed templates/*.tmpl
@@ -16,40 +18,46 @@ var templateFS embed.FS
 // Output is a single self-contained file the user can email or share —
 // only external resource is Chart.js from CDN, which gracefully degrades
 // to "tables only" when the recipient is offline.
-func writeHTML(path string, rep *report) error {
+func writeHTML(path string, rep *report) (err error) {
 	t, err := loadTemplate()
 	if err != nil {
-		return fmt.Errorf("load template: %w", err)
+		return errors.Wrap(err, "load template")
 	}
 
-	f, err := os.Create(path)
+	f, err := os.Create(path) //nolint:gosec // path supplied by user via report export UI
 	if err != nil {
-		return err //nolint:wrapcheck
+		return err //nolint:wrapcheck // wrapped by caller in Generate
 	}
-	defer f.Close()
+
+	defer func() {
+		cerr := f.Close()
+		if err == nil && cerr != nil {
+			err = cerr
+		}
+	}()
 
 	// Render with chartData injected as a JS literal so Chart.js can pick
 	// it up without a network round-trip.
 	chartData, err := json.Marshal(buildChartData(rep))
 	if err != nil {
-		return fmt.Errorf("marshal chart data: %w", err)
+		return errors.Wrap(err, "marshal chart data")
 	}
 
-	return t.Execute(f, map[string]any{ //nolint:wrapcheck
+	return t.Execute(f, map[string]any{ //nolint:wrapcheck // wrapped by caller in Generate
 		"Report":    rep,
-		"ChartJSON": template.JS(string(chartData)),
+		"ChartJSON": template.JS(string(chartData)), //nolint:gosec // chart JSON is generated server-side from local probe data, not user input
 	})
 }
 
 func loadTemplate() (*template.Template, error) {
-	return template.New("report").Funcs(funcMap).ParseFS(templateFS, "templates/*.tmpl") //nolint:wrapcheck
+	return template.New("report").Funcs(funcMap).ParseFS(templateFS, "templates/*.tmpl") //nolint:wrapcheck // wrapped by caller in writeHTML
 }
 
 // chartPayload is the JSON shape consumed by the inlined Chart.js script.
 type chartPayload struct {
-	Hours    []string  `json:"hours"`
-	Median   []float64 `json:"median"`
-	P95      []float64 `json:"p95"`
+	Hours     []string  `json:"hours"`
+	Median    []float64 `json:"median"`
+	P95       []float64 `json:"p95"`
 	UptimePct []float64 `json:"uptime_pct"`
 }
 
@@ -67,13 +75,16 @@ func buildChartData(rep *report) chartPayload {
 		} else {
 			out.Median = append(out.Median, 0)
 		}
+
 		if b.P95RTT != nil {
 			out.P95 = append(out.P95, *b.P95RTT)
 		} else {
 			out.P95 = append(out.P95, 0)
 		}
+
 		out.UptimePct = append(out.UptimePct, b.UptimePct)
 	}
+
 	return out
 }
 
@@ -86,6 +97,7 @@ var funcMap = template.FuncMap{
 		if v == nil {
 			return "—"
 		}
+
 		return fmt.Sprintf("%.2f ms", *v)
 	},
 	"fmtFloat": func(v float64) string {

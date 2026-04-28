@@ -13,20 +13,26 @@ import (
 func RegisterWifiHandlers(s *Server, client *ent.Client) {
 	s.Register("wifi.list", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p wifiListParams
-		if err := json.Unmarshal(params, &p); err != nil {
+
+		err := json.Unmarshal(params, &p)
+		if err != nil {
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
+
 		now := time.Now().UnixMilli()
 		if p.ToMs == 0 {
 			p.ToMs = now
 		}
+
 		if p.FromMs == 0 {
 			p.FromMs = p.ToMs - 60*60*1000
 		}
+
 		out, err := storage.QueryWifiSamples(ctx, client, p.FromMs, p.ToMs)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
+
 		return out, nil
 	})
 }

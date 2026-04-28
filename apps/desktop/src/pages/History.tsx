@@ -23,6 +23,12 @@ import { TimeRangePicker, defaultRange, type TimeRange } from '../components/Tim
 import { useColorPalette } from '../hooks/useColorPalette';
 import { useSamplesQuery } from '../hooks/useSamplesQuery';
 import { useAllProbeTargets } from '../hooks/useAllProbeTargets';
+import {
+  BUCKET_INTERVAL_MS,
+  fillBucketGaps,
+  fillRawGaps,
+  generateTimeTicks,
+} from '../lib/chartTime';
 import type { AggregatedRow, RawSample } from '../lib/ipc';
 
 /**
@@ -166,6 +172,8 @@ export function HistoryPage() {
               data={samples.data}
               targetsToChart={targetsToChart}
               getColor={getColor}
+              fromMs={fromMs}
+              toMs={toMs}
             />
           )}
         </Card>
@@ -200,17 +208,39 @@ function HistoryChart({
   data,
   targetsToChart,
   getColor,
+  fromMs,
+  toMs,
 }: {
   data: NonNullable<ReturnType<typeof useSamplesQuery>['data']>;
   targetsToChart: string[];
   getColor: (label: string) => string;
+  fromMs: number;
+  toMs: number;
 }) {
   const points = useMemo<PivotPoint[]>(() => {
     if (data.granularity === 'raw') {
-      return pivotRaw(data.rows, targetsToChart);
+      // Raw probes don't have a fixed bucket cadence — detect anomalous
+      // gaps (>30s, well above the 2.5s default probe interval) and
+      // splice in null markers so connectNulls={false} can break the line.
+      return fillRawGaps(pivotRaw(data.rows, targetsToChart));
     }
-    return pivotAggregated(data.rows, targetsToChart);
-  }, [data, targetsToChart]);
+    // Aggregated tiers know their bucket size — generate a complete
+    // grid of buckets across the window and fill missing slots with
+    // empty rows that resolve to undefined for every series, which
+    // recharts skips when connectNulls is off.
+    const interval = BUCKET_INTERVAL_MS[data.granularity];
+    return fillBucketGaps(
+      pivotAggregated(data.rows, targetsToChart),
+      fromMs,
+      toMs,
+      interval,
+    );
+  }, [data, targetsToChart, fromMs, toMs]);
+
+  // 7 ticks across whatever window the user picked — `generateTimeTicks`
+  // rounds the spacing to whole minutes / hours / days so labels stay
+  // legible.
+  const xTicks = useMemo(() => generateTimeTicks(fromMs, toMs, 7), [fromMs, toMs]);
 
   return (
     <YStack height={320}>
@@ -219,6 +249,10 @@ function HistoryChart({
           <CartesianGrid stroke="var(--borderColor)" strokeDasharray="3 3" />
           <XAxis
             dataKey="ts"
+            type="number"
+            scale="time"
+            domain={[fromMs, toMs]}
+            ticks={xTicks}
             tickFormatter={fmtTimeShort}
             tick={{ fontSize: 10, fill: 'var(--color9)' }}
             stroke="var(--borderColor)"
@@ -242,7 +276,7 @@ function HistoryChart({
               strokeWidth={1.5}
               dot={false}
               isAnimationActive={false}
-              connectNulls
+              connectNulls={false}
             />
           ))}
         </LineChart>
@@ -356,8 +390,20 @@ function SummaryStats({
             const p95 = pct(sorted, 0.95);
             const p99 = pct(sorted, 0.99);
             const uptime = e.count > 0 ? (e.success / e.count) * 100 : 0;
+            // Uptime tiers — semantic colors, not the watchfire amber. Green
+            // for "really hitting it" (three-nines and up), $orange10 for
+            // "noticeable trouble" (clearly distinct from $color10 muted
+            // text — $yellow10 was washing out on the slate background),
+            // $red10 for "fire's out." 99% sits in plain $color12 so the
+            // table doesn't shout when nothing's actually wrong.
             const uptimeColor =
-              uptime >= 99.5 ? '$accentBackground' : uptime >= 95 ? '$yellow10' : '$red10';
+              uptime >= 99.9
+                ? '$green10'
+                : uptime >= 99
+                  ? '$color12'
+                  : uptime >= 95
+                    ? '$orange10'
+                    : '$red10';
             return (
               <XStack
                 key={label}
