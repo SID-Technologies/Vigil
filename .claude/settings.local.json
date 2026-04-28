@@ -47,7 +47,9 @@
       "Bash(sed -i '' 's/\"strict\": true/\"strict\": false/' tsconfig.json)",
       "Bash(cp /tmp/tsconfig.bak tsconfig.json)",
       "Bash(grep -rn 'color=\"\\\\$' /Users/danflanagan/Documents/GitHub/Pugio/apps/web/src --include=\"*.tsx\")",
-      "Bash(grep -rn 'Button[^>]*color=\"\\\\$' /Users/danflanagan/Documents/GitHub/Pugio/apps/web/src --include=\"*.tsx\")"
+      "Bash(grep -rn 'Button[^>]*color=\"\\\\$' /Users/danflanagan/Documents/GitHub/Pugio/apps/web/src --include=\"*.tsx\")",
+      "Bash(echo \"tsc=$?\")",
+      "Bash(echo \"vite=$?\")"
     ]
   }
 }

@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { onSidecarEvent } from '../lib/events';
-import type { ProbeCycleEvent, ProbeResult } from './useProbeCycle';
+import { useMemo, useSyncExternalStore } from 'react';
+import {
+  getProbeBuffer,
+  getProbeCount,
+  getProbeStoreVersion,
+  subscribeProbeStore,
+} from '../lib/probeStore';
+import type { ProbeResult } from './useProbeCycle';
 
 /**
  * Aggregated live state for one target — what the tile renders.
@@ -27,49 +32,31 @@ const EMPTY_STATE: LiveTargetState = {
 };
 
 /**
- * Maintains a rolling window of `windowMs` per target, fed by `probe:cycle`
- * events. Each event contains every target's latest probe, so we update all
- * 13 buffers in one pass and trim by timestamp afterward.
+ * Per-target rolling-window summaries plus a tick counter for "alive" pulses.
  *
- * Buffer lives in a ref to avoid spawning new Map identities on every cycle.
- * State is just a tick counter that increments after each update — components
- * memo on tick so renders stay cheap.
- *
- * Default window: 5 minutes. Steady-state cycle rate ~24/min × 5 min = ~120
- * probes per target retained, ~1.5KB/target × 13 targets = ~20KB total.
+ * The data lives in the singleton probe store (lib/probeStore). This hook is
+ * a thin reader: subscribe to the store's version number, then derive
+ * summaries from the current buffer. Crucially, the buffer survives route
+ * changes — navigating Dashboard → Settings → Dashboard no longer wipes the
+ * 5-minute history that powers tile sparklines and success%.
  */
-export function useLiveSamples(windowMs = 5 * 60 * 1000): {
+export function useLiveSamples(): {
   states: Map<string, LiveTargetState>;
   /** Increments on each probe:cycle — handy as a render trigger / pulse counter. */
   tick: number;
 } {
-  const bufferRef = useRef<Map<string, ProbeResult[]>>(new Map());
-  const [tick, setTick] = useState(0);
+  const version = useSyncExternalStore(
+    subscribeProbeStore,
+    getProbeStoreVersion,
+    getProbeStoreVersion,
+  );
 
-  useEffect(() => {
-    let active = true;
-    const unlistenPromise = onSidecarEvent<ProbeCycleEvent>('probe:cycle', (event) => {
-      if (!active) return;
-      const cutoff = Date.now() - windowMs;
-      for (const r of event.results) {
-        const arr = bufferRef.current.get(r.target.label) ?? [];
-        arr.push(r);
-        // Trim from the front while older than the window.
-        while (arr.length > 0 && arr[0].ts_unix_ms < cutoff) {
-          arr.shift();
-        }
-        bufferRef.current.set(r.target.label, arr);
-      }
-      setTick((t) => t + 1);
-    });
-    return () => {
-      active = false;
-      unlistenPromise.then((fn) => fn()).catch(() => {});
-    };
-  }, [windowMs]);
+  // Recompute summaries when the store version changes. The buffer reference
+  // is stable across calls (the store mutates it in place), so we depend on
+  // `version` to drive recomputation.
+  const states = useMemo(() => computeStates(getProbeBuffer()), [version]);
 
-  const states = computeStates(bufferRef.current);
-  return { states, tick };
+  return { states, tick: getProbeCount() };
 }
 
 function computeStates(buffer: Map<string, ProbeResult[]>): Map<string, LiveTargetState> {

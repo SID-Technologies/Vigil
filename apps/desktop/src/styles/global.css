@@ -61,6 +61,14 @@
   background-color: rgba(139, 148, 158, 0.45);
   background-clip: padding-box;
 }
+/*
+  The little square where vertical and horizontal scrollbars meet. Without
+  this rule WebKit paints it pure white, which renders as a stark white box
+  on the bottom-right of any scrollable container. Match the page background.
+*/
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 ::selection {
   background: var(--accentColor);

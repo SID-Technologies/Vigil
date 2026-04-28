@@ -49,9 +49,17 @@ function AppContent() {
   return (
     <TamaguiProvider config={tamaguiCreatedConfig} defaultTheme="dark">
       <Theme name={resolvedTheme}>
-        <XStack flex={1} minHeight="100vh" backgroundColor="$background">
+        {/*
+          height="100vh" (not minHeight) anchors the row to exactly the
+          viewport. Without this, route changes that produce content of
+          different heights make the XStack grow/shrink, which in turn
+          stretches/contracts the Sidebar — visible as a height "flash"
+          on every navigation. The right column scrolls internally
+          (overflow="auto") so it only paints scrollbars when needed.
+        */}
+        <XStack height="100vh" backgroundColor="$background">
           <Sidebar />
-          <YStack flex={1} overflow="scroll">
+          <YStack flex={1} overflow="auto">
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/history" element={<HistoryPage />} />

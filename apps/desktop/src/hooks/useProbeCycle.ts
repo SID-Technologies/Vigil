@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react';
-import { onSidecarEvent } from '../lib/events';
+import { useSyncExternalStore } from 'react';
+import {
+  getLatestCycle,
+  getProbeCount,
+  getProbeStoreVersion,
+  subscribeProbeStore,
+} from '../lib/probeStore';
 import type { ProbeKind } from '../lib/ipc';
 
 export interface ProbeResult {
@@ -24,23 +29,17 @@ export interface ProbeCycleEvent {
 }
 
 /**
- * Subscribes to `probe:cycle` events from the sidecar. Returns the most
- * recent cycle plus a counter of cycles received since mount (handy for
- * showing "alive" pulses in the UI).
+ * Reads the most recent probe cycle and the cycle counter from the singleton
+ * probe store. Both values persist across route changes — the store is owned
+ * at module scope, not by any one component.
+ *
+ * The hook subscribes to a primitive `version` number; React rerenders only
+ * when it changes, and the live data is read fresh from the store each time.
  */
 export function useProbeCycle() {
-  const [latest, setLatest] = useState<ProbeCycleEvent | null>(null);
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    const unlisten = onSidecarEvent<ProbeCycleEvent>('probe:cycle', (data) => {
-      setLatest(data);
-      setCount((c) => c + 1);
-    });
-    return () => {
-      unlisten.then((fn) => fn()).catch(() => {});
-    };
-  }, []);
-
-  return { latest, count };
+  useSyncExternalStore(subscribeProbeStore, getProbeStoreVersion, getProbeStoreVersion);
+  return {
+    latest: getLatestCycle(),
+    count: getProbeCount(),
+  };
 }

@@ -14,24 +14,25 @@ interface InfoLabelProps {
  * etc) where the abbreviation is industry-standard but opaque to users
  * who aren't network engineers.
  *
- * The tooltip uses the native browser `title` attribute. Less
- * customizable than a popover but: zero JS, no positioning bugs, works
- * offline, screen-reader-friendly. The cost is a ~500ms hover delay
- * before it shows — acceptable for a "what does P95 mean?" lookup.
+ * The tooltip uses the native browser `title` attribute, but on a wrapping
+ * <span> — Tamagui doesn't reliably forward unknown DOM attributes through
+ * its styled components on web, so putting `title` on an XStack silently
+ * dropped it. The native span is invisible (display: contents) so it
+ * doesn't disturb layout.
+ *
+ * Trade-off vs a custom popover: ~500ms hover delay before it appears, no
+ * styling control. Worth it: zero JS, no positioning bugs, screen-reader
+ * support comes for free.
  */
 export function InfoLabel({ label, explain }: InfoLabelProps) {
   return (
-    <XStack
-      gap="$1"
-      alignItems="center"
-      cursor="help"
-      // @ts-expect-error — Tamagui forwards `title` to the underlying DOM element
-      title={explain}
-    >
-      <Text fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600" numberOfLines={1}>
-        {label}
-      </Text>
-      <Info size={10} color="var(--color8)" />
-    </XStack>
+    <span title={explain} style={{ display: 'inline-flex', cursor: 'help' }}>
+      <XStack gap="$1" alignItems="center">
+        <Text fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600" numberOfLines={1}>
+          {label}
+        </Text>
+        <Info size={10} color="var(--color8)" />
+      </XStack>
+    </span>
   );
 }
