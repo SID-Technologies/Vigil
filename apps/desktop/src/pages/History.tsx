@@ -25,6 +25,7 @@ import { useSamplesQuery } from '../hooks/useSamplesQuery';
 import { useAllProbeTargets } from '../hooks/useAllProbeTargets';
 import {
   BUCKET_INTERVAL_MS,
+  CycleBucket,
   fillBucketGaps,
   fillRawGaps,
   generateTimeTicks,
@@ -148,7 +149,7 @@ export function HistoryPage() {
                 }
                 onSetAll={setSelected}
                 onClear={() => setSelected([])}
-                emptyMessage="None selected — chart will show all targets."
+                emptyMessage="All targets shown — click one to focus."
               />
             </YStack>
           </YStack>
@@ -512,9 +513,10 @@ function pivotRaw(rows: RawSample[], targets: string[]): PivotPoint[] {
   const byTs = new Map<number, PivotPoint>();
   for (const r of rows) {
     if (!allowed.has(r.target_label) || !r.success || r.rtt_ms == null) continue;
-    const existing = byTs.get(r.ts_unix_ms) ?? { ts: r.ts_unix_ms };
+    const t = CycleBucket(r.ts_unix_ms);
+    const existing = byTs.get(t) ?? { ts: t };
     existing[r.target_label] = r.rtt_ms;
-    byTs.set(r.ts_unix_ms, existing);
+    byTs.set(t, existing);
   }
   return Array.from(byTs.values()).sort((a, b) => a.ts - b.ts);
 }
