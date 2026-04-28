@@ -14,24 +14,15 @@ import (
 	"github.com/sid-technologies/vigil/internal/probes"
 )
 
-// configProvider is the slice of Monitor's API the flusher needs. Decoupled
-// so flusher tests can mock it without spinning up a full Monitor.
+// configProvider is the slice of Monitor's API the flusher needs — kept
+// narrow so tests can mock without a full Monitor.
 type configProvider interface {
 	Config() Config
 	subscribe() <-chan struct{}
 }
 
-// flusher drains the in-memory buffer to SQLite on a fixed interval and
-// captures one Wi-Fi sample per flush. Bulk inserts use Ent's CreateBulk
-// for ~10× throughput vs individual saves.
-//
-// On insert failure (rare with SQLite — usually disk full or DB locked too
-// long), results are requeued and we log a warning. Next flush will retry.
-//
-// The flush interval and wifi-enabled flag are read fresh from the
-// configProvider each iteration, so config changes via UpdateConfig take
-// effect on the very next flush. The wake channel from subscribe()
-// shortens that further by interrupting in-progress sleeps.
+// flusher drains the buffer to SQLite on FlushIntervalSec and captures one
+// Wi-Fi sample per flush. Bulk-insert failures requeue the batch.
 type flusher struct {
 	client    *ent.Client
 	buf       *buffer
@@ -47,17 +38,13 @@ func newFlusher(client *ent.Client, buf *buffer, cfg configProvider) *flusher {
 	}
 }
 
-// run blocks until ctx is canceled. Re-times the loop each iteration so
-// flush_interval changes propagate without restart.
 func (f *flusher) run(ctx context.Context) {
 	wake := f.cfg.subscribe()
 
 	for {
 		interval := time.Duration(f.cfg.Config().FlushIntervalSec) * time.Second
 		if interval <= 0 {
-			// Safety guard: if the user somehow wrote a non-positive flush
-			// interval, fall back to the seed default so the flusher keeps
-			// running instead of busy-looping on a zero timer.
+			// Guard against a non-positive value busy-looping the timer.
 			interval = time.Duration(constants.DefaultFlushIntervalSec) * time.Second
 		}
 
@@ -73,9 +60,7 @@ func (f *flusher) run(ctx context.Context) {
 		case <-timer.C:
 			f.flushOnce(ctx)
 		case <-wake:
-			// Config changed — abandon the current sleep, loop again to
-			// pick up the new interval. We do NOT flush here; the wake is
-			// purely about reschedule, not "flush now."
+			// Reschedule only — wake is not "flush now."
 			timer.Stop()
 		}
 	}
@@ -185,7 +170,6 @@ func (f *flusher) flushSamples(ctx context.Context) {
 	}
 }
 
-// Compile-time anchor — keeps unused-import warnings honest.
 var (
 	_ = entsample.FieldTsUnixMs
 	_ = wifisample.FieldTsUnixMs

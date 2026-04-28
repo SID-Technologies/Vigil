@@ -11,15 +11,9 @@ import (
 	"time"
 )
 
-// SampleWifi parses `netsh wlan show interfaces` on Windows. Unchanged in
-// behavior from the legacy Python implementation — same parser, same
-// expected output format.
-//
-// Caveat: netsh's output is localized. On a German/French/etc. Windows, the
-// "Signal" / "Receive rate" / "BSSID" labels are translated and this parser
-// returns mostly empty fields. We don't try to handle that — Vigil's target
-// audience runs English-locale Windows and the ROI on a multi-locale parser
-// is low.
+// SampleWifi parses `netsh wlan show interfaces`. netsh output is
+// localized — non-English Windows returns mostly empty fields, which is an
+// accepted limitation.
 func SampleWifi(ctx context.Context) WifiSample {
 	sample := WifiSample{Timestamp: time.Now()}
 
@@ -57,7 +51,7 @@ func parseNetshWlan(stdout string, sample *WifiSample) {
 	if v := grab(stdout, "Signal"); v != "" {
 		if pct, ok := parsePercent(v); ok {
 			sample.SignalPercent = intPtr(pct)
-			// Rough Windows convention: 100% ≈ -50 dBm, 0% ≈ -100 dBm.
+			// Windows convention: 100% ≈ -50 dBm, 0% ≈ -100 dBm.
 			rssi := -100 + (pct / 2)
 			sample.RSSIDbm = intPtr(rssi)
 		}

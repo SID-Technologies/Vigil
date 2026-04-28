@@ -12,39 +12,27 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/sample1min"
 	"github.com/sid-technologies/vigil/db/ent/sample5min"
 	"github.com/sid-technologies/vigil/internal/constants"
+	"github.com/sid-technologies/vigil/internal/runloop"
 	"github.com/sid-technologies/vigil/internal/stats"
 )
 
-// Aggregator builds 5-minute and 1-hour rollup buckets on a fixed cadence.
-//
-// Cadence: wakes every 5 minutes. Each wakeup:
-//  1. Builds 5-min buckets for any closed-and-ready (target, window) keys
-//     not already present in sample_5min.
-//  2. Builds 1-hour buckets for any closed-and-ready windows. 1h rollups
-//     read from sample_5min, NOT from raw — by the time retention prunes
-//     raw, the 5min table still has 90 days of data.
-//
-// Idempotency: aggregations use the (bucket_start, target_label) unique
-// index. We Query first to skip existing buckets — INSERT-OR-IGNORE would
-// be cleaner but Ent doesn't expose it portably. Race-free because there's
-// exactly one Aggregator goroutine.
+// Aggregator builds 1-min, 5-min, and 1-hour rollup buckets. The 1h tier
+// reads from sample_5min (not raw), so it survives raw retention pruning.
+// Idempotent via (bucket_start, target_label) uniqueness — race-free because
+// there's exactly one Aggregator goroutine.
 type Aggregator struct {
 	client *ent.Client
 
-	// LookbackMs caps how far back the aggregator scans on each wakeup.
-	// Defaults are tuned so a sidecar that's been off for hours will catch
-	// up on first run, but doesn't read years of history every cycle.
+	// Per-tier lookback window — caps each scan so a long-offline sidecar
+	// catches up on first run without reading years of history.
 	Lookback1minMs int64
 	Lookback5minMs int64
 	Lookback1hMs   int64
 
-	// Interval between wakeups. Tests can shorten this; production stays
-	// at 1 minute so the 1-min tier feels close to live for charts.
 	Interval time.Duration
 }
 
-// New builds an Aggregator with sensible defaults. Tests can override the
-// fields directly afterwards.
+// New returns an Aggregator with default lookbacks and a 1-minute interval.
 func New(client *ent.Client) *Aggregator {
 	return &Aggregator{
 		client:         client,
@@ -55,23 +43,10 @@ func New(client *ent.Client) *Aggregator {
 	}
 }
 
-// Run blocks until ctx is canceled. On startup, runs once immediately so
-// the dashboard has data to query right after the sidecar boots from cold.
+// Run blocks until ctx is canceled. Runs once on startup so a cold-booted
+// dashboard has data immediately.
 func (a *Aggregator) Run(ctx context.Context) {
-	a.runOnce(ctx)
-
-	ticker := time.NewTicker(a.Interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info().Msg("aggregator: shutting down")
-			return
-		case <-ticker.C:
-			a.runOnce(ctx)
-		}
-	}
+	runloop.Every(ctx, "aggregator", a.Interval, a.runOnce)
 }
 
 func (a *Aggregator) runOnce(ctx context.Context) {
@@ -93,9 +68,8 @@ func (a *Aggregator) runOnce(ctx context.Context) {
 	}
 }
 
-// optionalStatsMutation is satisfied by *ent.Sample1minMutation,
-// *ent.Sample5minMutation, and *ent.Sample1hMutation. Ent generates these
-// setters on every mutation type that has the corresponding field.
+// optionalStatsMutation is satisfied by every Sample*Mutation type that
+// has the optional RTT/jitter fields.
 type optionalStatsMutation interface {
 	SetRttP50Ms(v float64)
 	SetRttP95Ms(v float64)
@@ -105,7 +79,6 @@ type optionalStatsMutation interface {
 	SetJitterMs(v float64)
 }
 
-// setOptionalStats applies all the optional RTT/jitter fields when present.
 func setOptionalStats(m optionalStatsMutation, s stats.BucketSummary) {
 	if s.P50Ms != nil {
 		m.SetRttP50Ms(*s.P50Ms)
@@ -132,9 +105,7 @@ func setOptionalStats(m optionalStatsMutation, s stats.BucketSummary) {
 	}
 }
 
-// rawTier identifies which raw-rollup destination table runRawAggregation is
-// targeting. It bundles the tier-specific Ent calls behind one switch so the
-// public run1min/run5min entry points stay tiny.
+// rawTier picks the destination table for runRawAggregation.
 type rawTier int
 
 const (
@@ -158,26 +129,19 @@ func (t rawTier) label() string {
 	return "5min"
 }
 
-// rawAggKey groups raw samples by (bucket-start, target-label).
 type rawAggKey struct {
 	bucket int64
 	label  string
 }
 
-// run1min builds sample_1min rows from any raw samples in the closed range
-// that don't yet have a corresponding bucket.
 func (a *Aggregator) run1min(ctx context.Context, nowMs int64) error {
 	return a.runRawAggregation(ctx, nowMs, tier1min, a.Lookback1minMs)
 }
 
-// run5min builds sample_5min rows from any raw samples in the closed range
-// that don't yet have a corresponding bucket.
 func (a *Aggregator) run5min(ctx context.Context, nowMs int64) error {
 	return a.runRawAggregation(ctx, nowMs, tier5min, a.Lookback5minMs)
 }
 
-// runRawAggregation builds rollup buckets from raw Sample rows. Tier
-// determines bucket width and the destination Ent table.
 func (a *Aggregator) runRawAggregation(ctx context.Context, nowMs int64, tier rawTier, lookbackMs int64) error {
 	width := tier.widthMs()
 
@@ -305,8 +269,6 @@ func (a *Aggregator) rawTierSave(ctx context.Context, tier rawTier, bucket int64
 	return nil
 }
 
-// run1h rolls up sample_5min into sample_1h. Reads only from sample_5min
-// (which retains 90d) so this still works after raw is pruned.
 func (a *Aggregator) run1h(ctx context.Context, nowMs int64) error {
 	oldestBucket, newestBucket := ClosedBucketRange(nowMs, OneHourMs, a.Lookback1hMs)
 	if newestBucket < oldestBucket {

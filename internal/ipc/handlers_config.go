@@ -4,25 +4,16 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/internal/storage"
 )
 
-// OnConfigChange is the callback fired after a successful config.update —
-// the app wires it to monitor.UpdateConfig so the running probe loop and
-// flusher pick up the change without a sidecar restart.
-//
-// Kept as a free function type rather than importing internal/monitor to
-// avoid a cycle (monitor depends on ipc.Server.Emit indirectly via the
-// onCycle callback path).
+// OnConfigChange fires after a successful config.update. Free function type to avoid a monitor → ipc import cycle.
 type OnConfigChange func(cfg storage.AppConfig)
 
-// RegisterConfigHandlers wires config.get and config.update. When onChange
-// is non-nil, it's invoked after every successful UpdateAppConfig so the
-// monitor can hot-reload its in-memory config.
-func RegisterConfigHandlers(s *Server, client *ent.Client, onChange OnConfigChange) {
+// RegisterConfigHandlers wires config.get and config.update.
+func RegisterConfigHandlers(s *Server, store *storage.Store, onChange OnConfigChange) {
 	s.Register("config.get", func(ctx context.Context, _ json.RawMessage) (any, *Error) {
-		out, err := storage.GetAppConfig(ctx, client)
+		out, err := store.GetAppConfig(ctx)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
@@ -38,7 +29,7 @@ func RegisterConfigHandlers(s *Server, client *ent.Client, onChange OnConfigChan
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
 
-		out, err := storage.UpdateAppConfig(ctx, client, patch)
+		out, err := store.UpdateAppConfig(ctx, patch)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}

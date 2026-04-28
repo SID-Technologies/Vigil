@@ -1,5 +1,4 @@
-// Package stats provides pure analysis functions used by the aggregator
-// and the report generator. No I/O, no logging — easy to unit-test.
+// Package stats provides pure analysis functions used by the aggregator and report generator.
 package stats
 
 import (
@@ -8,11 +7,8 @@ import (
 	"github.com/sid-technologies/vigil/internal/constants"
 )
 
-// Percentile returns the value at quantile q (0..1) from a sorted slice.
-// Uses linear-index style: idx = floor(len * q), clamped to last element.
-// Matches the Python tool's behavior so historical reports remain comparable.
-//
-// Returns (0, false) if the slice is empty.
+// Percentile returns the value at quantile q (0..1) from a sorted slice
+// using floor(len*q), clamped. Empty input returns (0, false).
 func Percentile(sortedXs []float64, q float64) (float64, bool) {
 	if len(sortedXs) == 0 {
 		return 0, false
@@ -44,16 +40,11 @@ func Mean(xs []float64) (float64, bool) {
 	return sum / float64(len(xs)), true
 }
 
-// JitterMs is RFC 3550-style jitter — the mean absolute delta between
-// consecutive RTTs in time order. This is what voice/video codecs actually
-// feel; std-dev-of-all is the wrong metric for call quality and would have
-// missed bursty jitter that matters in practice.
-//
-// Requires at least 2 samples. Returns (0, false) otherwise.
-//
-// NOTE: caller is responsible for ordering the slice by timestamp ascending
-// — jitter math depends on it. Mixing two targets' RTTs into one slice gives
-// nonsense.
+// JitterMs is RFC 3550-style jitter: the mean absolute delta between
+// consecutive RTTs in time order. This is what voice/video codecs feel;
+// std-dev-of-all misses bursty jitter that matters for call quality.
+// Caller orders by timestamp ascending; mixing targets gives nonsense.
+// Returns (0, false) for fewer than 2 samples.
 func JitterMs(rttsInTimeOrder []float64) (float64, bool) {
 	if len(rttsInTimeOrder) < 2 {
 		return 0, false
@@ -73,8 +64,7 @@ func JitterMs(rttsInTimeOrder []float64) (float64, bool) {
 	return sumAbs / float64(len(rttsInTimeOrder)-1), true
 }
 
-// BucketSummary is the output of Aggregate — what the aggregator writes to
-// sample_5min/sample_1h tables (minus the bucket key itself).
+// BucketSummary is what the aggregator writes to sample_5min/sample_1h.
 type BucketSummary struct {
 	Count        int
 	SuccessCount int
@@ -88,8 +78,7 @@ type BucketSummary struct {
 	Errors       map[string]int
 }
 
-// SampleInput is the minimal projection of a probe Sample needed to compute
-// a BucketSummary. Decoupled from the Ent type so tests don't need a DB.
+// SampleInput is the minimal projection of a probe Sample for aggregation.
 type SampleInput struct {
 	TSUnixMs int64
 	Success  bool
@@ -97,23 +86,15 @@ type SampleInput struct {
 	Error    *string
 }
 
-// Aggregate folds a slice of samples (any time order) into a BucketSummary.
-// Sorts internally so the caller can pass DB query results as-is.
-//
-// All percentiles / mean / max / jitter are computed only over successful
-// samples with non-nil RTT. Error counts are computed over failed samples.
-//
-// Pointer fields (P50Ms, P95Ms, P99Ms, MaxMs, MeanMs, JitterMs) are nil
-// when there are no successful samples — distinguishes "no signal" from
-// "0ms latency" in the UI.
+// Aggregate folds a slice of samples (any order) into a BucketSummary.
+// Stats pointer fields stay nil when there are no successful samples — that
+// distinguishes "no signal" from "0ms latency" in the UI.
 func Aggregate(samples []SampleInput) BucketSummary {
 	out := BucketSummary{
 		Count:  len(samples),
 		Errors: map[string]int{},
 	}
 
-	// Two passes: collect time-ordered RTTs for jitter, sorted RTTs for
-	// percentiles, and tally errors.
 	timeOrdered := make([]SampleInput, len(samples))
 	copy(timeOrdered, samples)
 	sort.Slice(timeOrdered, func(i, j int) bool {
@@ -150,8 +131,8 @@ func Aggregate(samples []SampleInput) BucketSummary {
 	return out
 }
 
-// FillBucketRTTStats populates the percentile, max, mean, and jitter pointer
-// fields on out from a slice of RTTs in time order. No-op when empty.
+// FillBucketRTTStats populates percentile/max/mean/jitter pointer fields
+// from RTTs in time order. No-op when empty.
 func FillBucketRTTStats(out *BucketSummary, rttsInTimeOrder []float64) {
 	if len(rttsInTimeOrder) == 0 {
 		return
@@ -190,20 +171,10 @@ func FillBucketRTTStats(out *BucketSummary, rttsInTimeOrder []float64) {
 	}
 }
 
-// AggregateFromBuckets folds child bucket summaries into a coarser summary.
-// Used by the 5min→1h rollup. Counts and error tallies sum directly. Stats
-// (percentiles, jitter) are recomputed from rebuilt-but-approximate inputs:
-//
-//   - We don't have the raw RTTs anymore at the 5min level.
-//   - For the 1-hour bucket's percentiles we approximate with weighted
-//     averages of the child buckets' p50/p95/p99/max/mean. This is a
-//     well-known trade-off — slightly less precise than re-percentiling
-//     raw, but raw has been pruned by then.
-//   - Jitter is the mean of child-bucket jitter values (weighted by sample
-//     count). Loses some signal but stays directionally correct.
-//
-// For full statistical fidelity we'd need to keep all raw forever —
-// trade-off is intentional and documented in CLAUDE.md.
+// AggregateFromBuckets folds child summaries into a coarser one for the
+// 5min→1h rollup. Counts/errors sum exactly. Percentiles and jitter use
+// success-count-weighted means of the child values — a fidelity trade-off
+// once raw RTTs have been pruned.
 func AggregateFromBuckets(children []BucketSummary) BucketSummary {
 	out := BucketSummary{Errors: map[string]int{}}
 	if len(children) == 0 {
@@ -292,9 +263,8 @@ func AggregateFromBuckets(children []BucketSummary) BucketSummary {
 	return out
 }
 
-// Round2 rounds v to two decimal places. Exported because probe recording
-// and report generation use the same rounding — single definition prevents
-// drift across call sites.
+// Round2 rounds v to two decimal places. Single definition prevents drift
+// between probe recording and report generation.
 func Round2(v float64) float64 {
 	const (
 		hundredths = 100.0

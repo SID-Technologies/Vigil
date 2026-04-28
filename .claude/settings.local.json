@@ -155,7 +155,15 @@
       "Bash(echo \"linux-build=$?\")",
       "Bash(echo \"linux-lint=$?\")",
       "Bash(echo \"darwin-build=$?\")",
-      "Bash(echo \"darwin-lint=$?\")"
+      "Bash(echo \"darwin-lint=$?\")",
+      "Bash(git *)",
+      "Bash(tee /tmp/lint.out)",
+      "Bash(tee /tmp/lint-base.out)",
+      "Bash(golangci-lint cache *)",
+      "Bash(tee /tmp/test.out)",
+      "Bash(echo \"stashed exit=$?\")",
+      "Bash(echo \"BUILD exit=$?\")",
+      "Bash(echo \"linux=$?\")"
     ]
   }
 }

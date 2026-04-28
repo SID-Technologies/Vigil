@@ -1,9 +1,5 @@
-// Package errors provides a consistent interface for using errors.
-// It also supports slog structured logging attributes; i.e. structured errors.
-// It is also a drop-in replacement for the standard library errors package.
-//
-// Adapted from sid-technologies/pugio's pkg/errors with the Pugio-specific
-// debug-output side effect removed.
+// Package errors is a drop-in replacement for the stdlib errors package
+// that carries slog-style structured attributes alongside each error.
 package errors
 
 import (
@@ -12,8 +8,7 @@ import (
 	pkgerrors "github.com/pkg/errors"
 )
 
-// New returns an error that formats as the given text and
-// contains the structured (slog) attributes.
+// New returns an error formatted via fmt.Sprintf with the attached attrs.
 func New(msg string, attrs ...any) error {
 	formatted := fmt.Sprintf(msg, attrs...)
 
@@ -23,8 +18,7 @@ func New(msg string, attrs ...any) error {
 	}
 }
 
-// Wrap returns a new error wrapping the provided with additional
-// structured fields.
+// Wrap returns err wrapped with msg and additional structured attrs.
 //
 //nolint:inamedparam // attrs... is variadic; named return is intentional.
 func Wrap(err error, msg string, attrs ...any) error {
@@ -32,14 +26,13 @@ func Wrap(err error, msg string, attrs ...any) error {
 		panic("wrap nil error")
 	}
 
-	// Support error types that do their own wrapping.
 	if wrapper, ok := err.(interface{ Wrap(string, ...any) error }); ok {
 		return wrapper.Wrap(msg, attrs...)
 	}
 
 	var inner structured
 	if As(err, &inner) {
-		attrs = append(attrs, inner.attrs...) // Append inner attributes
+		attrs = append(attrs, inner.attrs...)
 	}
 
 	return structured{

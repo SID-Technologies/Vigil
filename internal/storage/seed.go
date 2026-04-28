@@ -1,8 +1,4 @@
-// Package storage holds the application's persistence layer above Ent.
-//
-// Each .go file groups related queries (targets.go, samples.go, etc.) so the
-// IPC handlers can call high-level methods like targets.List() rather than
-// composing Ent query builders inline.
+// Package storage is the persistence layer above Ent.
 package storage
 
 import (
@@ -18,14 +14,11 @@ import (
 )
 
 
-// SeedDefaultTargets inserts the 12 builtin probe targets if and only if the
-// targets table is empty. Idempotent — safe to call on every startup.
-//
-// Distinguishing "first run" from "user deleted everything" is intentional:
-// the user is allowed to remove all defaults and use only their own probe
-// list. We don't re-add defaults on subsequent boots.
-func SeedDefaultTargets(ctx context.Context, client *ent.Client) error {
-	count, err := client.Target.Query().Count(ctx)
+// SeedDefaultTargets inserts the builtin probe targets only when the table is
+// empty — a user who has deleted every default should not see them resurrected
+// on the next boot.
+func (s *Store) SeedDefaultTargets(ctx context.Context) error {
+	count, err := s.client.Target.Query().Count(ctx)
 	if err != nil {
 		return err //nolint:wrapcheck // wrapped at IPC boundary
 	}
@@ -38,7 +31,7 @@ func SeedDefaultTargets(ctx context.Context, client *ent.Client) error {
 
 	bulk := make([]*ent.TargetCreate, 0, len(defaults))
 	for _, t := range defaults {
-		c := client.Target.Create().
+		c := s.client.Target.Create().
 			SetID(uuid.NewString()).
 			SetLabel(t.Label).
 			SetKind(target.Kind(string(t.Kind))).
@@ -52,7 +45,7 @@ func SeedDefaultTargets(ctx context.Context, client *ent.Client) error {
 		bulk = append(bulk, c)
 	}
 
-	_, err = client.Target.CreateBulk(bulk...).Save(ctx)
+	_, err = s.client.Target.CreateBulk(bulk...).Save(ctx)
 	if err != nil {
 		return err //nolint:wrapcheck // wrapped at IPC boundary
 	}
@@ -62,11 +55,9 @@ func SeedDefaultTargets(ctx context.Context, client *ent.Client) error {
 	return nil
 }
 
-// SeedAppConfig inserts the singleton app_config row with default values if
-// it doesn't exist. Defaults match the legacy Python tool's CLI defaults so
-// behavior is identical out of the box.
-func SeedAppConfig(ctx context.Context, client *ent.Client) error {
-	exists, err := client.AppConfig.Query().Where().Exist(ctx)
+// SeedAppConfig inserts the singleton app_config row on first run.
+func (s *Store) SeedAppConfig(ctx context.Context) error {
+	exists, err := s.client.AppConfig.Query().Where().Exist(ctx)
 	if err != nil {
 		return err //nolint:wrapcheck // wrapped at IPC boundary
 	}
@@ -75,7 +66,7 @@ func SeedAppConfig(ctx context.Context, client *ent.Client) error {
 		return nil
 	}
 
-	_, err = client.AppConfig.Create().
+	_, err = s.client.AppConfig.Create().
 		SetID(AppConfigSingletonID).
 		SetPingIntervalSec(constants.DefaultPingIntervalSec).
 		SetFlushIntervalSec(constants.DefaultFlushIntervalSec).

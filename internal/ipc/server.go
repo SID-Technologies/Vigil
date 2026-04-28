@@ -12,26 +12,25 @@ import (
 	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
-// Handler is the signature every IPC method implements. Returns a JSON-
-// serializable result on success, or an *Error on failure. Returning a plain
-// Go error is converted to Error{Code: "internal", Message: err.Error()}.
+// Handler is the signature every IPC method implements.
 type Handler func(ctx context.Context, params json.RawMessage) (any, *Error)
 
-// Server reads requests line-by-line from `in`, dispatches to registered
-// Handlers, and writes responses + events line-by-line to `out`.
+// Wire format — one JSON object per line in each direction:
 //
-// The protocol is deliberately simple: one JSON object per line. There's no
-// framing header, no batching, no streaming. If a method needs to push
-// progress, it does so via Emit() between request handlers.
+//	→ {"id":"...","method":"foo.bar","params":{...}}
+//	← {"id":"...","result":{...}}            // success
+//	← {"id":"...","error":{"code","message"}} // failure
+//	← {"event":"foo:bar","data":{...}}        // unsolicited event (no id)
+
+// Server dispatches JSON-RPC requests read from in and writes responses + events to out.
 type Server struct {
 	in       io.Reader
 	out      io.Writer
 	handlers map[string]Handler
-	outMu    sync.Mutex // serializes writes to out (events from many goroutines)
+	outMu    sync.Mutex // serializes writes from many goroutines
 }
 
 // NewServer constructs an IPC server bound to the given streams.
-// Typical wiring: NewServer(os.Stdin, os.Stdout).
 func NewServer(in io.Reader, out io.Writer) *Server {
 	return &Server{
 		in:       in,
@@ -40,22 +39,15 @@ func NewServer(in io.Reader, out io.Writer) *Server {
 	}
 }
 
-// Register binds a method name to a handler. Calling Register with the same
-// name twice replaces the previous handler. Not thread-safe — call all
-// Register()s before Run().
+// Register binds method to handler. Not thread-safe — call before Run.
 func (s *Server) Register(method string, handler Handler) {
 	s.handlers[method] = handler
 }
 
-// Run blocks reading from `in` until ctx is canceled or the input stream
-// closes (e.g. parent Tauri shell exits). Each request is dispatched on a
-// goroutine so a slow handler can't block subsequent requests.
-//
-// Returns nil on clean EOF, or a wrapped error on read failure.
+// Run reads requests until ctx is canceled or in hits EOF. Each request is dispatched on its own goroutine.
 func (s *Server) Run(ctx context.Context) error {
 	scanner := bufio.NewScanner(s.in)
-	// IPC payloads can be larger than the default 64K (e.g. samples.query
-	// returning a few thousand rows). Bump the buffer ceiling.
+	// samples.query can return a few thousand rows; default 64K is too small.
 	const maxIPCLine = 8 * 1024 * 1024
 
 	buf := make([]byte, 0, 64*1024)
@@ -73,7 +65,7 @@ func (s *Server) Run(ctx context.Context) error {
 			continue
 		}
 
-		// Copy the line because the scanner reuses its buffer between Scan calls.
+		// scanner reuses its buffer between Scan calls; copy before goroutine handoff.
 		payload := make([]byte, len(line))
 		copy(payload, line)
 
@@ -88,10 +80,7 @@ func (s *Server) Run(ctx context.Context) error {
 	return nil
 }
 
-// Emit sends an unsolicited event to the Tauri shell. Safe to call from any
-// goroutine. Errors writing to stdout are logged but not surfaced — if the
-// Tauri shell has gone away, the next read in Run() will return EOF and the
-// sidecar will shut down on its own.
+// Emit sends an unsolicited event to the Tauri shell. Safe from any goroutine.
 func (s *Server) Emit(event string, data any) {
 	s.write(Event{Event: event, Data: data})
 }

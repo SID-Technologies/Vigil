@@ -5,16 +5,11 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/internal/storage"
 )
 
-// RegisterOutageHandlers wires outages.list onto the IPC server.
-//
-// Default window: last 7 days. Optional `scope` filter (e.g.
-// "target:google_dns_icmp" or "network"). Optional `only_open` flag for the
-// dashboard's "currently degraded" badge.
-func RegisterOutageHandlers(s *Server, client *ent.Client) {
+// RegisterOutageHandlers wires outages.list. Defaults to the last 7 days.
+func RegisterOutageHandlers(s *Server, store *storage.Store) {
 	s.Register("outages.list", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p outagesListParams
 
@@ -32,7 +27,7 @@ func RegisterOutageHandlers(s *Server, client *ent.Client) {
 			p.FromMs = p.ToMs - 7*24*60*60*1000
 		}
 
-		out, err := storage.QueryOutages(ctx, client, storage.QueryOutagesParams{
+		out, err := store.QueryOutages(ctx, storage.QueryOutagesParams{
 			FromMs:   p.FromMs,
 			ToMs:     p.ToMs,
 			Scope:    p.Scope,

@@ -9,20 +9,16 @@ import (
 	"github.com/sid-technologies/vigil/internal/storage"
 )
 
-// targetScopePrefix is the prefix outage Scope strings use for per-target
-// outages (e.g. "target:google_dns_icmp"). Network-wide outages use scope
-// "network" instead and are filtered out of per-target burst counts.
+// targetScopePrefix marks per-target outage scopes (e.g. "target:foo");
+// network-wide outages use scope "network" and are excluded from per-target
+// burst counts.
 const targetScopePrefix = "target:"
 
-// minSamplesForBucketP95 guards against computing p95 on tiny samples in
-// hourly buckets — a 5-sample window's "95th percentile" is just the max,
-// which gives misleading numbers in reports.
+// minSamplesForBucketP95 guards against p95-as-max on tiny hourly windows.
 const minSamplesForBucketP95 = 20
 
-// report is the consolidated payload written to JSON output and passed to
-// the HTML template. Designed to be self-describing — each field has a
-// stable JSON tag, and timestamps are duplicated in unix-ms (machine) +
-// ISO8601 (human) form so the file is friendly to scripts AND eyeballs.
+// report is the payload written to JSON and passed to the HTML template.
+// Timestamps appear in both unix-ms and ISO8601 for script + human readers.
 type report struct {
 	GeneratedAt   string               `json:"generated_at"`
 	WindowStart   string               `json:"window_start_utc"`
@@ -34,8 +30,7 @@ type report struct {
 	HourlyBuckets []hourlyBucket       `json:"hourly"`
 	Outages       []storage.Outage     `json:"outages"`
 	WifiSamples   []storage.WifiSample `json:"wifi_samples,omitempty"`
-	// Raw probes only included in JSON to keep file size manageable; the
-	// HTML report doesn't need them inline.
+	// Raw probes only emitted to JSON; HTML doesn't inline them.
 	Samples []storage.Sample `json:"samples,omitempty"`
 }
 
@@ -79,8 +74,7 @@ type hourlyBucket struct {
 }
 
 // buildReport folds raw samples + wifi + outages into the report payload.
-// All percentile / aggregate math goes through internal/stats so the values
-// match what the dashboard shows for the same window.
+// Percentile math goes through internal/stats so values match the dashboard.
 func buildReport(fromMs, toMs int64, samples []storage.Sample, wifi []storage.WifiSample, outages []storage.Outage) *report {
 	now := time.Now().UTC()
 	r := &report{
@@ -221,9 +215,8 @@ func computePerTarget(samples []storage.Sample, outages []storage.Outage) []targ
 	return out
 }
 
-// FillTargetRTTStats populates the percentile, max, mean, and jitter pointer
-// fields on row from rtts (any order — sorted in place) and rttsTimeOrder
-// (must be in time order). No-op when rtts is empty.
+// FillTargetRTTStats populates percentile/max/mean/jitter pointer fields.
+// rtts is sorted in place; rttsTimeOrder must be in time order. No-op if empty.
 func FillTargetRTTStats(row *targetStats, rtts, rttsTimeOrder []float64) {
 	if len(rtts) == 0 {
 		return
@@ -260,8 +253,7 @@ func FillTargetRTTStats(row *targetStats, rtts, rttsTimeOrder []float64) {
 	}
 }
 
-// computeHourlyBuckets produces a row per hour-of-the-day local-time bucket
-// across the window. Used to power the time-series chart in the HTML report.
+// computeHourlyBuckets bins samples by local-time hour for the time-series chart.
 func computeHourlyBuckets(samples []storage.Sample) []hourlyBucket {
 	type acc struct {
 		total int

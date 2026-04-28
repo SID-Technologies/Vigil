@@ -1,10 +1,5 @@
-// Package db wires the Ent client to a SQLite database under the user's app
-// data directory.
-//
-// We use modernc.org/sqlite (pure Go) instead of mattn/go-sqlite3 (cgo) so
-// cross-compilation is trivial — `GOOS=windows go build` Just Works on a Mac
-// without setting up a Windows C toolchain. Modest perf hit vs cgo, but
-// Vigil writes ~5 rows/sec, well below where it matters.
+// Package db wires the Ent client to SQLite under the user's app data dir.
+// Uses modernc.org/sqlite (pure Go) so cross-compilation needs no C toolchain.
 package db
 
 import (
@@ -17,17 +12,12 @@ import (
 
 	"github.com/sid-technologies/vigil/db/ent"
 
-	// Pure-Go SQLite driver registered as "sqlite".
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // registers "sqlite" driver
 )
 
-// Open opens (or creates) the Vigil SQLite database under dataDir and runs
-// schema migrations. The DB lives at <dataDir>/vigil.db.
-//
-// Connection settings:
-//   - WAL mode: better concurrent reads while the monitor flushes writes.
-//   - foreign_keys=on: Ent relies on FK enforcement for cascades.
-//   - busy_timeout=5000: handle brief contention without erroring out.
+// Open opens or creates <dataDir>/vigil.db and runs schema migrations.
+// WAL mode for concurrent reads during writes; FKs on for Ent cascades;
+// busy_timeout=5000 absorbs brief write contention.
 func Open(ctx context.Context, dataDir string) (*ent.Client, error) {
 	dbPath := filepath.Join(dataDir, "vigil.db")
 	dsn := "file:" + dbPath + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
@@ -36,8 +26,8 @@ func Open(ctx context.Context, dataDir string) (*ent.Client, error) {
 	if err != nil {
 		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
 	}
-	// SQLite is single-writer; multiple writers serialize anyway. One
-	// connection avoids contention surprises and is plenty for a desktop tool.
+	// SQLite serializes writes anyway; pinning to one conn dodges Ent opening
+	// 10 conns and timing out the 11th under load.
 	rawDB.SetMaxOpenConns(1)
 
 	drv := entsql.OpenDB(dialect.SQLite, rawDB)

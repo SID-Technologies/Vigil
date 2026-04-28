@@ -9,13 +9,9 @@ import (
 	"github.com/sid-technologies/vigil/internal/storage"
 )
 
-// float64BitSize is the bit-size argument to strconv.FormatFloat, named so
-// the call site doesn't read like a magic number.
 const float64BitSize = 64
 
-// writeCSV produces one row per probe — flat, spreadsheet-friendly. Same
-// columns as the prior CLI's CSV output so existing downstream scripts
-// (if any) keep working.
+// writeCSV emits one row per probe in spreadsheet-friendly columns.
 func writeCSV(path string, samples []storage.Sample) (err error) {
 	f, err := os.Create(path) //nolint:gosec // path supplied by user via report export UI
 	if err != nil {

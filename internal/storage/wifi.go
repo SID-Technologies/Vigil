@@ -7,7 +7,7 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/wifisample"
 )
 
-// WifiSample is the storage-layer view of a Wi-Fi sample.
+// WifiSample is the IPC-shape view of one Wi-Fi observation.
 type WifiSample struct {
 	TSUnixMs      int64    `json:"ts_unix_ms"`
 	SSID          *string  `json:"ssid,omitempty"`
@@ -20,10 +20,9 @@ type WifiSample struct {
 }
 
 // QueryWifiSamples returns Wi-Fi samples in [fromMs, toMs] ordered by time.
-// Vigil flushes one Wi-Fi sample per minute by default, so even a 7-day
-// window is ~10K rows — no pagination needed at this resolution.
-func QueryWifiSamples(ctx context.Context, client *ent.Client, fromMs, toMs int64) ([]WifiSample, error) {
-	rows, err := client.WifiSample.Query().
+// One sample/minute means a 7-day window is ~10K rows — no pagination needed.
+func (s *Store) QueryWifiSamples(ctx context.Context, fromMs, toMs int64) ([]WifiSample, error) {
+	rows, err := s.client.WifiSample.Query().
 		Where(
 			wifisample.TsUnixMsGTE(fromMs),
 			wifisample.TsUnixMsLTE(toMs),

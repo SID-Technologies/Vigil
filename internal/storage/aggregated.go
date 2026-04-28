@@ -9,9 +9,9 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/sample5min"
 )
 
-// AggregatedRow is the IPC-shape projection of a Sample1min, Sample5min, or
-// Sample1h row. One Go type for all three tiers — granularity is communicated
-// by the response wrapper, not by the row itself.
+
+// AggregatedRow is the IPC shape shared across the 1min/5min/1h rollup tiers;
+// granularity is signaled by the response wrapper, not the row.
 type AggregatedRow struct {
 	BucketStartUnixMs int64          `json:"bucket_start_unix_ms"`
 	TargetLabel       string         `json:"target_label"`
@@ -27,16 +27,16 @@ type AggregatedRow struct {
 	Errors            map[string]int `json:"errors,omitempty"`
 }
 
-// QueryAggregatedParams scopes a sample_1min, sample_5min, or sample_1h read.
+// QueryAggregatedParams scopes a rollup-tier read.
 type QueryAggregatedParams struct {
 	FromMs       int64
 	ToMs         int64
 	TargetLabels []string
 }
 
-// Query1minSamples reads from sample_1min with optional target filter.
-func Query1minSamples(ctx context.Context, client *ent.Client, p QueryAggregatedParams) ([]AggregatedRow, error) {
-	q := client.Sample1min.Query().
+// Query1minSamples returns 1-minute rollup buckets in the window.
+func (s *Store) Query1minSamples(ctx context.Context, p QueryAggregatedParams) ([]AggregatedRow, error) {
+	q := s.client.Sample1min.Query().
 		Where(sample1min.BucketStartUnixMsGTE(p.FromMs), sample1min.BucketStartUnixMsLTE(p.ToMs)).
 		Order(ent.Asc(sample1min.FieldBucketStartUnixMs))
 	if len(p.TargetLabels) > 0 {
@@ -51,9 +51,9 @@ func Query1minSamples(ctx context.Context, client *ent.Client, p QueryAggregated
 	return projectAggRows(rows), nil
 }
 
-// Query5minSamples reads from sample_5min with optional target filter.
-func Query5minSamples(ctx context.Context, client *ent.Client, p QueryAggregatedParams) ([]AggregatedRow, error) {
-	q := client.Sample5min.Query().
+// Query5minSamples returns 5-minute rollup buckets in the window.
+func (s *Store) Query5minSamples(ctx context.Context, p QueryAggregatedParams) ([]AggregatedRow, error) {
+	q := s.client.Sample5min.Query().
 		Where(sample5min.BucketStartUnixMsGTE(p.FromMs), sample5min.BucketStartUnixMsLTE(p.ToMs)).
 		Order(ent.Asc(sample5min.FieldBucketStartUnixMs))
 	if len(p.TargetLabels) > 0 {
@@ -68,9 +68,9 @@ func Query5minSamples(ctx context.Context, client *ent.Client, p QueryAggregated
 	return projectAggRows(rows), nil
 }
 
-// Query1hSamples reads from sample_1h with optional target filter.
-func Query1hSamples(ctx context.Context, client *ent.Client, p QueryAggregatedParams) ([]AggregatedRow, error) {
-	q := client.Sample1h.Query().
+// Query1hSamples returns 1-hour rollup buckets in the window.
+func (s *Store) Query1hSamples(ctx context.Context, p QueryAggregatedParams) ([]AggregatedRow, error) {
+	q := s.client.Sample1h.Query().
 		Where(sample1h.BucketStartUnixMsGTE(p.FromMs), sample1h.BucketStartUnixMsLTE(p.ToMs)).
 		Order(ent.Asc(sample1h.FieldBucketStartUnixMs))
 	if len(p.TargetLabels) > 0 {
@@ -85,9 +85,8 @@ func Query1hSamples(ctx context.Context, client *ent.Client, p QueryAggregatedPa
 	return projectAggRows(rows), nil
 }
 
-// projectAggRows turns any of the three Ent rollup row types into the shared
-// IPC AggregatedRow. The type switch is the only practical way to share field
-// access — Ent generates distinct row types per table with no shared interface.
+// projectAggRows collapses Ent's three distinct rollup row types (no shared
+// interface generated) into the IPC AggregatedRow.
 func projectAggRows(rows any) []AggregatedRow {
 	switch rs := rows.(type) {
 	case []*ent.Sample1min:

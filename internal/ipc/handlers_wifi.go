@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/internal/storage"
 )
 
-// RegisterWifiHandlers wires wifi.list onto the IPC server.
-func RegisterWifiHandlers(s *Server, client *ent.Client) {
+// RegisterWifiHandlers wires wifi.list.
+func RegisterWifiHandlers(s *Server, store *storage.Store) {
 	s.Register("wifi.list", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p wifiListParams
 
@@ -28,7 +27,7 @@ func RegisterWifiHandlers(s *Server, client *ent.Client) {
 			p.FromMs = p.ToMs - 60*60*1000
 		}
 
-		out, err := storage.QueryWifiSamples(ctx, client, p.FromMs, p.ToMs)
+		out, err := store.QueryWifiSamples(ctx, p.FromMs, p.ToMs)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}

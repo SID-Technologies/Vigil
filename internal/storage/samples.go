@@ -7,8 +7,7 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/sample"
 )
 
-// Sample is the storage-layer view of a probe result. JSON-serialized
-// directly into IPC responses.
+// Sample is the IPC-shape view of a single probe result.
 type Sample struct {
 	TSUnixMs    int64    `json:"ts_unix_ms"`
 	TargetLabel string   `json:"target_label"`
@@ -20,10 +19,8 @@ type Sample struct {
 	Error       *string  `json:"error,omitempty"`
 }
 
-// QuerySamplesParams scopes a samples.query call. fromMs/toMs are inclusive
-// unix-ms bounds. If targetLabels is non-empty, results are filtered to that
-// set; otherwise all targets are included. Limit caps the result count to
-// keep the IPC payload bounded — frontend typically requests <= 5000 rows.
+// QuerySamplesParams — FromMs/ToMs are inclusive unix-ms bounds; Limit > 0 caps
+// result count to keep IPC payloads bounded.
 type QuerySamplesParams struct {
 	FromMs       int64
 	ToMs         int64
@@ -31,10 +28,9 @@ type QuerySamplesParams struct {
 	Limit        int
 }
 
-// QuerySamples runs a time-windowed (and optionally target-filtered) read.
-// Results are ordered by ts_unix_ms ascending — that's what charts expect.
-func QuerySamples(ctx context.Context, client *ent.Client, p QuerySamplesParams) ([]Sample, error) {
-	q := client.Sample.Query().
+// QuerySamples returns samples in [FromMs, ToMs] ordered ascending by timestamp.
+func (s *Store) QuerySamples(ctx context.Context, p QuerySamplesParams) ([]Sample, error) {
+	q := s.client.Sample.Query().
 		Where(
 			sample.TsUnixMsGTE(p.FromMs),
 			sample.TsUnixMsLTE(p.ToMs),
@@ -56,7 +52,7 @@ func QuerySamples(ctx context.Context, client *ent.Client, p QuerySamplesParams)
 
 	out := make([]Sample, 0, len(rows))
 	for _, r := range rows {
-		s := Sample{
+		row := Sample{
 			TSUnixMs:    r.TsUnixMs,
 			TargetLabel: r.TargetLabel,
 			TargetKind:  r.TargetKind,
@@ -64,18 +60,18 @@ func QuerySamples(ctx context.Context, client *ent.Client, p QuerySamplesParams)
 			Success:     r.Success,
 		}
 		if r.TargetPort != nil {
-			s.TargetPort = r.TargetPort
+			row.TargetPort = r.TargetPort
 		}
 
 		if r.RttMs != nil {
-			s.RTTMs = r.RttMs
+			row.RTTMs = r.RttMs
 		}
 
 		if r.Error != nil {
-			s.Error = r.Error
+			row.Error = r.Error
 		}
 
-		out = append(out, s)
+		out = append(out, row)
 	}
 
 	return out, nil

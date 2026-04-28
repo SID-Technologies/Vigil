@@ -4,18 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"syscall"
-	"time"
 
-	"github.com/sid-technologies/vigil/internal/stats"
 	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
-// TCPProbe times a TCP three-way handshake to host:port. Proves the actual
-// service is reachable, not just the host — some ISPs drop HTTPS while
-// leaving ICMP alone (or vice versa), which is why ICMP-only monitors miss
-// real call/web outages.
+// TCPProbe times a TCP three-way handshake. Proves service reachability,
+// not just host — some ISPs drop HTTPS while leaving ICMP alone.
 type TCPProbe struct {
 	target Target
 }
@@ -30,41 +25,18 @@ func (p *TCPProbe) Target() Target { return p.target }
 
 // Run executes the TCP probe.
 func (p *TCPProbe) Run(ctx context.Context, timeoutMs int) Result {
-	r := Result{
-		TimestampMs: nowMs(),
-		Target:      p.target,
-	}
-
 	if p.target.Port == nil {
-		r.Error = errPtr("missing_port")
-		return r
+		return Result{
+			TimestampMs: nowMs(),
+			Target:      p.target,
+			Error:       errPtr("missing_port"),
+		}
 	}
 
-	dialCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
-	defer cancel()
-
-	d := net.Dialer{}
-	address := net.JoinHostPort(p.target.Host, strconv.Itoa(*p.target.Port))
-
-	start := time.Now()
-
-	conn, err := d.DialContext(dialCtx, "tcp", address)
-	if err != nil {
-		r.Error = errPtr(classifyDialError(err))
-		return r
-	}
-
-	_ = conn.Close()
-
-	r.Success = true
-	r.RTTMs = floatPtr(stats.Round2(float64(time.Since(start)) / float64(time.Millisecond)))
-
-	return r
+	return dialAndMeasure(ctx, p.target, *p.target.Port, timeoutMs, PacketSpec{Network: "tcp"})
 }
 
-// classifyDialError maps Go's network errors to stable codes the UI can
-// translate. Matches the Python tool's classification labels so existing
-// reports remain comparable.
+// classifyDialError maps Go network errors to stable codes the UI can translate.
 func classifyDialError(err error) string {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "timeout"

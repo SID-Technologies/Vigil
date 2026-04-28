@@ -4,17 +4,14 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/internal/probes"
 	"github.com/sid-technologies/vigil/internal/storage"
 )
 
-// RegisterTargetHandlers wires targets.list/create/update/delete onto the
-// IPC server. Callers (cmd/vigil-sidecar) pass the Ent client they opened
-// at startup.
-func RegisterTargetHandlers(s *Server, client *ent.Client) {
+// RegisterTargetHandlers wires targets.list/create/update/delete.
+func RegisterTargetHandlers(s *Server, store *storage.Store) {
 	s.Register("targets.list", func(ctx context.Context, _ json.RawMessage) (any, *Error) {
-		out, err := storage.ListTargets(ctx, client)
+		out, err := store.ListTargets(ctx)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
@@ -33,19 +30,18 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 		if p.Label == "" || p.Host == "" || p.Kind == "" {
 			return nil, &Error{Code: "invalid_params", Message: "label, host, and kind are required"}
 		}
-		// Probe-kind-specific validation: TCP/UDP must have a port.
+
 		switch probes.Kind(p.Kind) {
 		case probes.KindTCP, probes.KindUDPDNS, probes.KindUDPSTUN:
 			if p.Port == nil {
 				return nil, &Error{Code: "invalid_params", Message: "port is required for tcp/udp_dns/udp_stun"}
 			}
 		case probes.KindICMP:
-			// no port required
 		default:
 			return nil, &Error{Code: "invalid_params", Message: "unknown kind: " + p.Kind}
 		}
 
-		t, err := storage.CreateTarget(ctx, client, p.Label, probes.Kind(p.Kind), p.Host, p.Port)
+		t, err := store.CreateTarget(ctx, p.Label, probes.Kind(p.Kind), p.Host, p.Port)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
@@ -65,17 +61,17 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 			return nil, &Error{Code: "invalid_params", Message: "id required"}
 		}
 
-		// Builtin targets can only have `enabled` toggled, never host/port edits.
-		existing, err := storage.GetTarget(ctx, client, p.ID)
+		existing, err := store.GetTarget(ctx, p.ID)
 		if err != nil {
 			return nil, &Error{Code: "not_found", Message: err.Error()}
 		}
 
+		// Builtin targets only allow toggling enabled.
 		if existing.IsBuiltin && (p.Host != nil || p.Port != nil) {
 			return nil, &Error{Code: "builtin_immutable", Message: "builtin targets only allow toggling 'enabled'"}
 		}
 
-		t, err := storage.UpdateTarget(ctx, client, p.ID, p.Enabled, p.Host, p.Port)
+		t, err := store.UpdateTarget(ctx, p.ID, p.Enabled, p.Host, p.Port)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
@@ -95,7 +91,7 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 			return nil, &Error{Code: "invalid_params", Message: "id required"}
 		}
 
-		existing, err := storage.GetTarget(ctx, client, p.ID)
+		existing, err := store.GetTarget(ctx, p.ID)
 		if err != nil {
 			return nil, &Error{Code: "not_found", Message: err.Error()}
 		}
@@ -104,7 +100,7 @@ func RegisterTargetHandlers(s *Server, client *ent.Client) {
 			return nil, &Error{Code: "builtin_immutable", Message: "builtin targets cannot be deleted; disable instead"}
 		}
 
-		err = storage.DeleteTarget(ctx, client, p.ID)
+		err = store.DeleteTarget(ctx, p.ID)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}

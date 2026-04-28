@@ -11,11 +11,7 @@ import (
 )
 
 // SampleWifi reads Wi-Fi state from netlink via mdlayher/wifi. Pure Go, no
-// shell-out, no `iw`/`nmcli` dependency. Works on any modern Linux desktop
-// distro (kernel 3.0+).
-//
-// Returns a near-empty sample if the host has no Wi-Fi interface or the
-// netlink call fails — never errors back to the caller.
+// shell-out. Returns a near-empty sample on failure rather than erroring.
 func SampleWifi(_ context.Context) WifiSample {
 	sample := WifiSample{Timestamp: time.Now()}
 
@@ -31,7 +27,6 @@ func SampleWifi(_ context.Context) WifiSample {
 		return sample
 	}
 
-	// Pick the first interface that's actually associated with a BSS.
 	for _, iface := range ifaces {
 		if iface.Type == wifi.InterfaceTypeMonitor {
 			continue
@@ -50,8 +45,7 @@ func SampleWifi(_ context.Context) WifiSample {
 			sample.BSSID = strPtr(bss.BSSID.String())
 		}
 
-		// mdlayher/wifi doesn't expose RSSI via the BSS struct; ask
-		// StationInfo on the connected interface for signal strength.
+		// mdlayher/wifi doesn't expose RSSI on BSS; StationInfo carries it.
 		stations, err := c.StationInfo(iface)
 		if err == nil {
 			for _, s := range stations {
@@ -63,8 +57,7 @@ func SampleWifi(_ context.Context) WifiSample {
 			}
 		}
 
-		// Channel is encoded in BSS.Frequency (MHz). Round-trip to channel
-		// number is a piecewise function — skip the math, store MHz.
+		// Frequency is in MHz; channel-number conversion is piecewise so we store MHz.
 		if bss.Frequency != 0 {
 			ch := strconv.Itoa(bss.Frequency) + " MHz"
 			sample.Channel = strPtr(ch)

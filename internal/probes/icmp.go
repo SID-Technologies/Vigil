@@ -12,17 +12,9 @@ import (
 	probing "github.com/prometheus-community/pro-bing"
 )
 
-// ICMPProbe sends one ICMP echo request and waits for a reply. Uses
-// pro-bing, which:
-//   - On Linux: uses unprivileged UDP-mode ICMP (no root needed when
-//     net.ipv4.ping_group_range is configured, the default on Ubuntu/Fedora).
-//   - On Windows: uses real ICMP sockets (no admin needed).
-//   - On macOS: uses unprivileged UDP-mode ICMP via the kernel's special
-//     socket type — works without sudo.
-//
-// We deliberately do not shell out to `ping`. The legacy Python tool did,
-// which broke on localized Windows (`ping` output is translated) and added
-// ~100ms of subprocess startup per probe.
+// ICMPProbe sends one ICMP echo request via pro-bing. Unprivileged on
+// Linux/macOS (UDP-mode ICMP) and Windows (real ICMP socket); never shells
+// out to `ping`, which broke on localized Windows in the predecessor tool.
 type ICMPProbe struct {
 	target Target
 }
@@ -55,14 +47,12 @@ func (p *ICMPProbe) Run(ctx context.Context, timeoutMs int) Result {
 		return r
 	}
 
-	// Windows requires privileged mode for raw ICMP sockets; macOS/Linux
-	// work unprivileged via the UDP-ICMP kernel feature.
+	// Windows raw ICMP needs privileged mode; macOS/Linux do not.
 	pinger.SetPrivileged(runtime.GOOS == "windows")
 
 	pinger.Count = 1
 	pinger.Timeout = time.Duration(timeoutMs) * time.Millisecond
 
-	// Run blocks until the count is met or timeout fires.
 	err = pinger.RunWithContext(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

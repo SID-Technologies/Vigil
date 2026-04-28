@@ -14,10 +14,8 @@ import (
 //go:embed templates/*.tmpl
 var templateFS embed.FS
 
-// writeHTML renders the report payload through the embedded HTML template.
-// Output is a single self-contained file the user can email or share —
-// only external resource is Chart.js from CDN, which gracefully degrades
-// to "tables only" when the recipient is offline.
+// writeHTML renders the embedded template into a self-contained file.
+// Chart.js is loaded from CDN; offline recipients see tables only.
 func writeHTML(path string, rep *report) (err error) {
 	t, err := loadTemplate()
 	if err != nil {
@@ -36,8 +34,7 @@ func writeHTML(path string, rep *report) (err error) {
 		}
 	}()
 
-	// Render with chartData injected as a JS literal so Chart.js can pick
-	// it up without a network round-trip.
+	// chartData is injected as a JS literal so Chart.js picks it up inline.
 	chartData, err := json.Marshal(buildChartData(rep))
 	if err != nil {
 		return errors.Wrap(err, "marshal chart data")
@@ -53,7 +50,7 @@ func loadTemplate() (*template.Template, error) {
 	return template.New("report").Funcs(funcMap).ParseFS(templateFS, "templates/*.tmpl") //nolint:wrapcheck // wrapped by caller in writeHTML
 }
 
-// chartPayload is the JSON shape consumed by the inlined Chart.js script.
+// chartPayload is consumed by the inlined Chart.js script.
 type chartPayload struct {
 	Hours     []string  `json:"hours"`
 	Median    []float64 `json:"median"`

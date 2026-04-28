@@ -2,17 +2,9 @@ package netinfo
 
 import "time"
 
-// WifiSample captures the network attachment state at a point in time. Most
-// fields are platform-dependent and may be nil:
-//
-//   - SSID, BSSID, Channel: usually available everywhere.
-//   - SignalPercent, RxRateMbps, TxRateMbps: Windows-only (parsed from
-//     `netsh wlan show interfaces`).
-//   - RSSIDbm: macOS via `system_profiler`, Windows derived, Linux netlink.
-//
-// Implementations for SampleWifi() live in wifi_{darwin,linux,windows}.go,
-// selected at build time via `//go:build` constraints. wifi_other.go is the
-// fallback for unsupported platforms (returns the timestamp + nothing else).
+// WifiSample captures network attachment state at a point in time. Most
+// fields are platform-dependent and may be nil; SignalPercent and Rx/Tx
+// rates are Windows-only.
 type WifiSample struct {
 	Timestamp     time.Time
 	SSID          *string
@@ -23,10 +15,6 @@ type WifiSample struct {
 	TxRateMbps    *float64 // Windows-only
 	Channel       *string
 }
-
-// strPtr / intPtr / f64Ptr — convenience helpers for the per-platform
-// implementations to avoid `x := "foo"; sample.SSID = &x` boilerplate.
-//
 
 func strPtr(s string) *string { return &s }
 

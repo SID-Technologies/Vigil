@@ -10,9 +10,8 @@ import (
 	"github.com/sid-technologies/vigil/internal/probes"
 )
 
-// Target is the storage-layer view of a probe target. Includes the DB-level
-// metadata (id, is_builtin, timestamps) that probes.Target deliberately
-// omits — probes don't care about CRUD identity.
+// Target adds DB-level metadata (id, is_builtin) on top of probes.Target,
+// which deliberately omits CRUD identity.
 type Target struct {
 	ID        string      `json:"id"`
 	Label     string      `json:"label"`
@@ -23,10 +22,9 @@ type Target struct {
 	IsBuiltin bool        `json:"is_builtin"`
 }
 
-// ListTargets returns all targets ordered by (is_builtin desc, label asc) so
-// the UI shows defaults first.
-func ListTargets(ctx context.Context, client *ent.Client) ([]Target, error) {
-	rows, err := client.Target.Query().
+// ListTargets returns every target ordered by label.
+func (s *Store) ListTargets(ctx context.Context) ([]Target, error) {
+	rows, err := s.client.Target.Query().
 		Order(ent.Asc(target.FieldLabel)).
 		All(ctx)
 	if err != nil {
@@ -41,12 +39,9 @@ func ListTargets(ctx context.Context, client *ent.Client) ([]Target, error) {
 	return out, nil
 }
 
-// ListEnabledProbes returns Probe instances for every enabled target, ready
-// to be installed in the monitor. Errors out if any builder fails (which
-// can only happen if the DB has a corrupt enum value — won't happen in
-// practice given Ent enforces enums).
-func ListEnabledProbes(ctx context.Context, client *ent.Client) ([]probes.Probe, error) {
-	rows, err := client.Target.Query().
+// ListEnabledProbes returns built Probe instances for every enabled target.
+func (s *Store) ListEnabledProbes(ctx context.Context) ([]probes.Probe, error) {
+	rows, err := s.client.Target.Query().
 		Where(target.EnabledEQ(true)).
 		All(ctx)
 	if err != nil {
@@ -75,9 +70,9 @@ func ListEnabledProbes(ctx context.Context, client *ent.Client) ([]probes.Probe,
 	return out, nil
 }
 
-// CreateTarget inserts a user-defined target. is_builtin is forced to false.
-func CreateTarget(ctx context.Context, client *ent.Client, label string, kind probes.Kind, host string, port *int) (Target, error) {
-	c := client.Target.Create().
+// CreateTarget inserts a user-defined target with is_builtin=false.
+func (s *Store) CreateTarget(ctx context.Context, label string, kind probes.Kind, host string, port *int) (Target, error) {
+	c := s.client.Target.Create().
 		SetID(uuid.NewString()).
 		SetLabel(label).
 		SetKind(target.Kind(string(kind))).
@@ -96,10 +91,10 @@ func CreateTarget(ctx context.Context, client *ent.Client, label string, kind pr
 	return toTarget(row), nil
 }
 
-// UpdateTarget mutates a target. Builtin targets cannot have host/port/kind
-// changed (only enabled). The handler enforces that — this layer trusts its caller.
-func UpdateTarget(ctx context.Context, client *ent.Client, id string, enabled *bool, host *string, port *int) (Target, error) {
-	upd := client.Target.UpdateOneID(id)
+// UpdateTarget — handler enforces the builtin host/port/kind immutability;
+// this layer trusts its caller.
+func (s *Store) UpdateTarget(ctx context.Context, id string, enabled *bool, host *string, port *int) (Target, error) {
+	upd := s.client.Target.UpdateOneID(id)
 	if enabled != nil {
 		upd.SetEnabled(*enabled)
 	}
@@ -120,15 +115,14 @@ func UpdateTarget(ctx context.Context, client *ent.Client, id string, enabled *b
 	return toTarget(row), nil
 }
 
-// DeleteTarget removes a non-builtin target. Builtin enforcement happens at
-// the handler layer (we want to surface a clear "cannot delete builtin" error code).
-func DeleteTarget(ctx context.Context, client *ent.Client, id string) error {
-	return client.Target.DeleteOneID(id).Exec(ctx) //nolint:wrapcheck // wrapped at IPC boundary
+// DeleteTarget — builtin guard lives at the handler so it can return a typed error.
+func (s *Store) DeleteTarget(ctx context.Context, id string) error {
+	return s.client.Target.DeleteOneID(id).Exec(ctx) //nolint:wrapcheck // wrapped at IPC boundary
 }
 
-// GetTarget fetches a single target by ID.
-func GetTarget(ctx context.Context, client *ent.Client, id string) (Target, error) {
-	row, err := client.Target.Get(ctx, id)
+// GetTarget fetches a target by id.
+func (s *Store) GetTarget(ctx context.Context, id string) (Target, error) {
+	row, err := s.client.Target.Get(ctx, id)
 	if err != nil {
 		return Target{}, err //nolint:wrapcheck // wrapped at IPC boundary
 	}

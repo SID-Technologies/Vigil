@@ -7,9 +7,8 @@ import (
 	"github.com/sid-technologies/vigil/db/ent/outage"
 )
 
-// Outage is the IPC-shape projection of an Outage row. Mirrors the
-// outage:start / outage:end event payload exactly so the frontend has one
-// type definition.
+// Outage matches the outage:start / outage:end event payload so the frontend
+// has one type definition.
 type Outage struct {
 	ID                  string         `json:"id"`
 	Scope               string         `json:"scope"`
@@ -19,23 +18,22 @@ type Outage struct {
 	Errors              map[string]int `json:"errors,omitempty"`
 }
 
-// QueryOutagesParams scopes an outages.list call.
+// QueryOutagesParams scopes a list-outages call.
 type QueryOutagesParams struct {
 	FromMs   int64
 	ToMs     int64
-	Scope    string // optional — if non-empty, filter to this scope
-	OnlyOpen bool   // if true, only return outages with end_ts_unix_ms = null
+	Scope    string
+	OnlyOpen bool
 }
 
-// QueryOutages returns outages overlapping [fromMs, toMs]. Definition of
-// "overlap": the outage either started in the window OR was still active
-// at fromMs. This way a long outage that started outside the window is
-// still surfaced — important for the dashboard's "outage in progress" badge.
-func QueryOutages(ctx context.Context, client *ent.Client, p QueryOutagesParams) ([]Outage, error) {
-	q := client.Outage.Query().
+// QueryOutages returns outages overlapping [fromMs, toMs] — either started in
+// the window, or started before but still active at fromMs. Catches the
+// in-progress outage that began before the window so the "outage in progress"
+// badge stays accurate.
+func (s *Store) QueryOutages(ctx context.Context, p QueryOutagesParams) ([]Outage, error) {
+	q := s.client.Outage.Query().
 		Order(ent.Desc(outage.FieldStartTsUnixMs))
 
-	// Started within window OR ongoing at window start (end_ts >= fromMs OR null).
 	q = q.Where(
 		outage.Or(
 			outage.And(

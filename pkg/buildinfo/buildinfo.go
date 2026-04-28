@@ -1,5 +1,4 @@
-// Package buildinfo exposes the binary's version, git commit, and build
-// timestamp from runtime/debug.BuildInfo.
+// Package buildinfo exposes version, git commit, and build timestamp.
 package buildinfo
 
 import (
@@ -8,24 +7,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// version is set by goreleaser at build-time via -ldflags.
-// For dev builds it stays "main".
+// version is set at build-time via -ldflags; "main" for dev builds.
 var version = "main"
 
 const (
-	unknown = "unknown"
-
-	// shortCommitHashLen matches the conventional 7-char short SHA used by
-	// `git log --oneline` and GitHub's commit URLs.
+	unknown            = "unknown"
 	shortCommitHashLen = 7
 )
 
-// Version returns the binary version (git tag for releases, "main" for dev).
+// Version returns the binary version.
 func Version() string {
 	return version
 }
 
-// Instrument logs the version, git commit, and timestamp once at startup.
+// Instrument logs version, commit, and timestamp once at startup.
 func Instrument() {
 	commit, timestamp := get()
 	log.Info().
@@ -35,7 +30,7 @@ func Instrument() {
 		Msg("vigil sidecar build info")
 }
 
-// GitCommit returns the git commit hash, or ("", false) if unavailable.
+// GitCommit returns the short commit hash, or ("", false) if unavailable.
 func GitCommit() (string, bool) {
 	commit, _ := get()
 	if commit == unknown {
@@ -45,7 +40,6 @@ func GitCommit() (string, bool) {
 	return commit, true
 }
 
-// get returns the git commit hash and timestamp from runtime build info.
 func get() (hash, timestamp string) { //nolint:nonamedreturns // revive's confusing-results wants named returns for same-type tuples
 	hash, timestamp = unknown, unknown
 	hashLen := shortCommitHashLen
@@ -66,7 +60,6 @@ func get() (hash, timestamp string) { //nolint:nonamedreturns // revive's confus
 		case "vcs.time":
 			timestamp = s.Value
 		default:
-			// other vcs.* keys (e.g. vcs.modified) are intentionally ignored
 		}
 	}
 

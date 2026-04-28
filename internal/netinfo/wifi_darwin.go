@@ -10,20 +10,12 @@ import (
 	"time"
 )
 
-// SampleWifi parses `system_profiler SPAirPortDataType` on macOS. We chose
-// system_profiler over the alternatives because:
-//
-//   - `airport -I` was removed in macOS Sonoma 14.4 (2024). Dead.
-//   - `wdutil info` requires Location Services permission or sudo. Awkward.
-//   - CoreWLAN via cgo gives the richest data but requires Objective-C
-//     bindings — overkill for v1.
-//
-// system_profiler is slow (~500ms) but our flush interval is 60s so the cost
-// is invisible. It runs without permissions and reliably exposes SSID, BSSID,
-// channel, and RSSI.
-//
-// Fields not exposed by system_profiler (signal_percent, rx/tx rates) remain
-// nil. Cross-platform code must treat them as "n/a" rather than 0.
+// SampleWifi parses `system_profiler SPAirPortDataType` on macOS.
+// system_profiler is the only sanctioned permissionless API — `airport -I`
+// was removed in Sonoma 14.4, `wdutil info` needs Location Services or
+// sudo, and CoreWLAN would require cgo. It's slow (~500ms) but runs at the
+// 60s flush interval so the cost is invisible. SignalPercent and rx/tx
+// rates aren't exposed and stay nil.
 func SampleWifi(ctx context.Context) WifiSample {
 	sample := WifiSample{Timestamp: time.Now()}
 
@@ -40,28 +32,19 @@ func SampleWifi(ctx context.Context) WifiSample {
 	return sample
 }
 
-// parseSystemProfilerAirport finds the "Current Network Information" block
-// in system_profiler's plain-text output and pulls SSID/BSSID/channel/RSSI.
+// parseSystemProfilerAirport pulls SSID/BSSID/channel/RSSI from the
+// "Current Network Information" block of system_profiler output. SSID is
+// the indented dictionary key under that header; we walk indentation depth
+// to find it. Fragile to Apple format changes but stable across recent
+// macOS versions.
 //
-// system_profiler's output structure (abbreviated):
+// Output shape (abbreviated):
 //
-//	Wi-Fi:
-//	    Interfaces:
-//	        en0:
-//	            Status: Connected
-//	            Current Network Information:
-//	                MyNetworkName:
-//	                    PHY Mode: 802.11ax
-//	                    BSSID: aa:bb:cc:dd:ee:ff
-//	                    Channel: 36 (5GHz, 80MHz)
-//	                    Country Code: US
-//	                    Network Type: Infrastructure
-//	                    Security: WPA2 Personal
-//	                    Signal / Noise: -52 dBm / -90 dBm
-//
-// The SSID is the dictionary key one indent past "Current Network Information".
-// We extract by walking lines and tracking indentation depth — fragile to
-// Apple changing the format, but stable across recent macOS versions.
+//	Current Network Information:
+//	    MyNetworkName:
+//	        BSSID: aa:bb:cc:dd:ee:ff
+//	        Channel: 36 (5GHz, 80MHz)
+//	        Signal / Noise: -52 dBm / -90 dBm
 func parseSystemProfilerAirport(out string, sample *WifiSample) {
 	lines := strings.Split(out, "\n")
 	inCurrent := false
@@ -119,7 +102,6 @@ func parseSystemProfilerAirport(out string, sample *WifiSample) {
 				sample.RSSIDbm = rssi
 			}
 		default:
-			// other lines in the block are not interesting to us
 		}
 	}
 }
@@ -131,14 +113,14 @@ func parseSignalDbm(line string) *int {
 		return nil
 	}
 
-	rest := strings.TrimSpace(after)
-	// rest = "-52 dBm / -90 dBm"
+	rest := strings.TrimSpace(after) // e.g. "-52 dBm / -90 dBm"
+
 	parts := strings.SplitN(rest, "/", 2)
 	if len(parts) == 0 {
 		return nil
 	}
 
-	first := strings.TrimSpace(parts[0]) // "-52 dBm"
+	first := strings.TrimSpace(parts[0])
 	first = strings.TrimSuffix(first, "dBm")
 	first = strings.TrimSpace(first)
 

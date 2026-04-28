@@ -1,18 +1,4 @@
-// Package monitor owns the probe loop. It:
-//
-//  1. Loads enabled targets from the DB at startup (and at config-change time
-//     in later phases).
-//  2. Optionally adds a synthetic `router_icmp` probe pointed at the
-//     auto-detected default gateway.
-//  3. Fires all probes in parallel each cycle, with a per-probe timeout.
-//  4. Pushes results into an in-memory buffer.
-//  5. Runs a flusher goroutine that drains the buffer to SQLite every
-//     `flush_interval_sec`, capturing a Wi-Fi sample at the same cadence.
-//  6. Emits a `probe.cycle` event after each cycle so the frontend can
-//     update the live dashboard without polling.
-//
-// Direct port of pingscraper.monitor.Monitor — same behavior, different
-// concurrency primitives (goroutines + channels instead of threads + locks).
+// Package monitor owns the probe loop and flusher.
 package monitor
 
 import (
@@ -28,9 +14,7 @@ import (
 	"github.com/sid-technologies/vigil/internal/probes"
 )
 
-// Config bundles the runtime knobs read from app_config (or overridden in
-// tests). Held by value — the monitor doesn't watch the DB for changes
-// within a session; restart applies new values.
+// Config bundles the runtime knobs read from app_config.
 type Config struct {
 	PingIntervalSec   float64
 	FlushIntervalSec  int
@@ -38,8 +22,7 @@ type Config struct {
 	WifiSampleEnabled bool
 }
 
-// CycleEvent is emitted after every probe cycle. The frontend uses this to
-// render the live dashboard without polling.
+// CycleEvent is emitted after every probe cycle.
 type CycleEvent struct {
 	TSUnixMs int64           `json:"ts_unix_ms"`
 	Total    int             `json:"total"`
@@ -48,23 +31,17 @@ type CycleEvent struct {
 	Results  []probes.Result `json:"results"`
 }
 
-// Monitor runs the probe loop and the flusher. Single Start() call,
-// Stop()-via-context-cancel.
-//
-// Config is hot-reloadable: callers invoke UpdateConfig with a new value
-// and the running goroutines pick up the change without a restart. The
-// probe loop and flusher each subscribe to a wake channel so their sleeps
-// are interrupted on config change — perceived latency for an interval
-// shrink is ~0, for a grow it's "wait out the current interval" which is
-// the conservative choice anyway.
+// Monitor runs the probe loop and flusher. Config is hot-reloadable via
+// UpdateConfig; subscribers wake on change and re-read at the top of each
+// iteration.
 type Monitor struct {
 	client *ent.Client
 
 	cfgMu sync.RWMutex
 	cfg   Config
 
-	// Wake channels — one per goroutine that subscribes via subscribe().
-	// UpdateConfig sends a wake to every channel (non-blocking).
+	// One wake channel per subscribed goroutine. UpdateConfig fans out a
+	// non-blocking send to each.
 	wakeMu sync.Mutex
 	wakers []chan struct{}
 
@@ -74,12 +51,10 @@ type Monitor struct {
 	probesMu sync.RWMutex
 	probes   []probes.Probe
 
-	// onCycle is called after each probe cycle completes (any goroutine).
 	onCycle func(CycleEvent)
 }
 
-// New constructs a Monitor. The probe list is loaded by Start() so the
-// monitor can be wired up before storage is fully ready in tests.
+// New constructs a Monitor.
 func New(client *ent.Client, cfg Config) *Monitor {
 	buf := newBuffer()
 	m := &Monitor{
@@ -92,7 +67,7 @@ func New(client *ent.Client, cfg Config) *Monitor {
 	return m
 }
 
-// Config returns a copy of the current config. Safe to call from any goroutine.
+// Config returns a copy of the current config.
 func (m *Monitor) Config() Config {
 	m.cfgMu.RLock()
 	defer m.cfgMu.RUnlock()
@@ -100,12 +75,7 @@ func (m *Monitor) Config() Config {
 	return m.cfg
 }
 
-// UpdateConfig replaces the running config and wakes all subscribers. Called
-// by the IPC layer after `config.update` lands a successful DB write.
-//
-// This is the entry point for hot-reload. The probe loop and flusher each
-// re-read config at the top of their loops, so they pick up the change
-// within one iteration.
+// UpdateConfig replaces the running config and wakes all subscribers.
 func (m *Monitor) UpdateConfig(cfg Config) {
 	m.cfgMu.Lock()
 	m.cfg = cfg
@@ -118,30 +88,25 @@ func (m *Monitor) UpdateConfig(cfg Config) {
 		select {
 		case w <- struct{}{}:
 		default:
-			// Channel already has a pending wake — coalescing is fine, the
-			// receiver re-reads config either way.
+			// Pending wake already buffered — coalesce.
 		}
 	}
 }
 
-// SetOnCycle registers a callback invoked after each probe cycle. Used by
-// the IPC layer to forward `probe.cycle` events. Not thread-safe — call
-// once before Start.
+// SetOnCycle registers a per-cycle callback. Not thread-safe; call once
+// before Run.
 func (m *Monitor) SetOnCycle(fn func(CycleEvent)) {
 	m.onCycle = fn
 }
 
-// SetProbes replaces the active probe list. Called once at startup with
-// SeedAndLoadProbes(); will be wired to config changes in later phases.
+// SetProbes replaces the active probe list.
 func (m *Monitor) SetProbes(probeList []probes.Probe) {
 	m.probesMu.Lock()
 	m.probes = probeList
 	m.probesMu.Unlock()
 }
 
-// Run blocks until ctx is canceled. Spawns the probe loop and flusher
-// goroutines; ensures both have stopped before returning so the sidecar can
-// shut down cleanly.
+// Run blocks until ctx is canceled.
 func (m *Monitor) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 
@@ -156,12 +121,9 @@ func (m *Monitor) Run(ctx context.Context) {
 	wg.Wait()
 }
 
-// AddDynamicGatewayProbe checks for a default gateway and, if found, prepends
-// a synthetic `router_icmp` probe to the active probe list. Called once at
-// startup before Run().
-//
-// The gateway is dynamic (changes with networks / DHCP) so we never persist
-// it — it's resolved fresh on each sidecar startup.
+// AddDynamicGatewayProbe prepends a `router_icmp` probe pointed at the
+// auto-detected default gateway. The gateway is resolved fresh on each
+// startup — never persisted, since it changes with networks / DHCP.
 func (*Monitor) AddDynamicGatewayProbe(existing []probes.Probe) []probes.Probe {
 	gateway, ok := netinfo.DetectDefaultGateway()
 	if !ok {
@@ -179,17 +141,14 @@ func (*Monitor) AddDynamicGatewayProbe(existing []probes.Probe) []probes.Probe {
 
 	probe, err := probes.Build(router)
 	if err != nil {
-		// Should never happen — KindICMP is exhaustive in factory.go.
 		return existing
 	}
 
 	return append([]probes.Probe{probe}, existing...)
 }
 
-// subscribe registers a buffered (capacity 1) wake channel. Goroutines
-// select on it alongside their own ticker / timeout to be woken when
-// config changes. Capacity 1 means a wake fired between two iterations
-// is held until consumed — no missed reloads.
+// subscribe returns a capacity-1 wake channel. Cap of 1 holds a wake fired
+// between iterations until consumed, so reloads are never missed.
 func (m *Monitor) subscribe() <-chan struct{} {
 	ch := make(chan struct{}, 1)
 
@@ -200,13 +159,6 @@ func (m *Monitor) subscribe() <-chan struct{} {
 	return ch
 }
 
-// probeLoop fires all probes in parallel each cycle, sleeping between cycles
-// so the start-of-cycle aligns to a fixed cadence (no drift, even if a slow
-// cycle pushes us past schedule — we just resync).
-//
-// Config is re-read every iteration via m.Config() so a change made via
-// UpdateConfig takes effect on the very next cycle. The wake channel
-// shortens that to "next iteration of this loop" by interrupting sleep.
 func (m *Monitor) probeLoop(ctx context.Context) {
 	wake := m.subscribe()
 	cycleStart := time.Now()
@@ -235,9 +187,8 @@ func (m *Monitor) probeLoop(ctx context.Context) {
 			return
 		case <-time.After(sleep):
 		case <-wake:
-			// Config changed — restart the loop. cycleStart updates so the
-			// next cycle uses the new interval from "now," not from the
-			// stale schedule.
+			// Reset cycleStart so the new interval runs from "now," not from
+			// the stale schedule.
 			cycleStart = time.Now()
 			continue
 		}
@@ -246,9 +197,6 @@ func (m *Monitor) probeLoop(ctx context.Context) {
 	}
 }
 
-// runCycle fires every probe in parallel with a bounded errgroup. Each probe
-// has its own per-call timeout; the cycle as a whole is capped at 1.5× the
-// probe timeout so a stalled DNS lookup can't delay the next cycle.
 func (m *Monitor) runCycle(parent context.Context) {
 	m.probesMu.RLock()
 	probeList := m.probes
@@ -266,8 +214,7 @@ func (m *Monitor) runCycle(parent context.Context) {
 
 	results := make([]probes.Result, len(probeList))
 	g, gctx := errgroup.WithContext(ctx)
-	// Bound concurrency so we don't open a thousand sockets if the user
-	// configures a giant target list.
+	// Bound concurrency: cap socket count if a user configures thousands of targets.
 	g.SetLimit(maxCycleConcurrency)
 
 	for i, p := range probeList {
@@ -300,16 +247,10 @@ func (m *Monitor) runCycle(parent context.Context) {
 	}
 }
 
-// maxCycleConcurrency caps the number of probes that run in parallel per
-// cycle. 64 is well above the default 13 targets but stops a misconfigured
-// 10000-target list from opening a socket per goroutine.
 const maxCycleConcurrency = 64
 
-// computeCycleTimeout derives the per-cycle deadline from the per-probe
-// timeout. We give the cycle 1.5× the probe timeout (so a slow probe can
-// retry once) plus a 500ms safety margin (DNS resolution, TLS handshake
-// jitter, scheduler latency). Tested at the ping_timeout_ms range bounds
-// in configBounds — both 100ms and 30s map to sensible cycle deadlines.
+// computeCycleTimeout derives the per-cycle deadline as 1.5× probeTimeoutMs
+// + 500ms (one-retry slack, plus DNS/TLS/scheduler margin).
 func computeCycleTimeout(probeTimeoutMs int) time.Duration {
 	const (
 		retrySlackMultiplier    = 3

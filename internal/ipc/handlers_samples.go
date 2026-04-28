@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/internal/storage"
 )
 
@@ -18,27 +17,15 @@ const (
 	granularity1Hour = "1h"
 )
 
-// SamplesQueryResponse wraps the result of samples.query so the frontend
-// knows which row shape it received without inspecting field presence.
-//
-// When granularity == "raw", Rows is []storage.Sample.
-// When granularity is "5min" or "1h", Rows is []storage.AggregatedRow.
+// SamplesQueryResponse tags rows with their granularity so the frontend knows the row shape.
+// Rows is []storage.Sample when granularity=="raw", otherwise []storage.AggregatedRow.
 type SamplesQueryResponse struct {
 	Granularity string `json:"granularity"`
 	Rows        any    `json:"rows"`
 }
 
-// RegisterSampleHandlers wires samples.query onto the IPC server.
-//
-// Granularity dispatch:
-//   - "raw"  : always raw, regardless of window size. Beware: 7 days of raw
-//     for 13 targets is ~3M rows. Frontend should not request raw
-//     over wide windows.
-//   - "1min" : always 1-min buckets.
-//   - "5min" : always 5-min buckets.
-//   - "1h"   : always 1-hour buckets.
-//   - "auto" : window <= 1h → raw, <= 6h → 1min, <= 7d → 5min, > 7d → 1h.
-func RegisterSampleHandlers(s *Server, client *ent.Client) {
+// RegisterSampleHandlers wires samples.query. See pickGranularity for auto-resolution rules.
+func RegisterSampleHandlers(s *Server, store *storage.Store) {
 	s.Register("samples.query", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p querySamplesParams
 
@@ -71,7 +58,7 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 
 		switch gran {
 		case granularityRaw:
-			rows, err := storage.QuerySamples(ctx, client, storage.QuerySamplesParams{
+			rows, err := store.QuerySamples(ctx, storage.QuerySamplesParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
@@ -84,7 +71,7 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 			return SamplesQueryResponse{Granularity: granularityRaw, Rows: rows}, nil
 
 		case granularity1Min:
-			rows, err := storage.Query1minSamples(ctx, client, storage.QueryAggregatedParams{
+			rows, err := store.Query1minSamples(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
@@ -96,7 +83,7 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 			return SamplesQueryResponse{Granularity: granularity1Min, Rows: rows}, nil
 
 		case granularity5min:
-			rows, err := storage.Query5minSamples(ctx, client, storage.QueryAggregatedParams{
+			rows, err := store.Query5minSamples(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
@@ -108,7 +95,7 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 			return SamplesQueryResponse{Granularity: granularity5min, Rows: rows}, nil
 
 		case granularity1Hour:
-			rows, err := storage.Query1hSamples(ctx, client, storage.QueryAggregatedParams{
+			rows, err := store.Query1hSamples(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
@@ -125,16 +112,9 @@ func RegisterSampleHandlers(s *Server, client *ent.Client) {
 	})
 }
 
-// pickGranularity is the auto-resolution heuristic. Mirrors the windowing
-// design captured in CLAUDE.md.
+// pickGranularity targets ~60-600 points per series so recharts stays smooth.
 //
-// Boundaries chosen so each tier lands in a "comfortable" point count for
-// recharts: roughly 60–600 points per series across the window.
-//
-//	≤ 1h    → raw (~1440 pts) — fine for short investigations
-//	≤ 6h    → 1-min (60–360 pts)
-//	≤ 7d    → 5-min (288–2016 pts)
-//	> 7d    → 1-hour (168+ pts)
+//	≤ 1h → raw, ≤ 6h → 1min, ≤ 7d → 5min, otherwise 1h.
 func pickGranularity(windowMs int64) string {
 	const (
 		oneHour   = int64(60 * 60 * 1000)

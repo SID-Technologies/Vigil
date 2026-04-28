@@ -2,11 +2,9 @@ package storage
 
 import (
 	"context"
-
-	"github.com/sid-technologies/vigil/db/ent"
 )
 
-// AppConfig is the JSON-serialized view of the singleton app_config row.
+// AppConfig is the JSON view of the singleton app_config row.
 type AppConfig struct {
 	PingIntervalSec   float64 `json:"ping_interval_sec"`
 	FlushIntervalSec  int     `json:"flush_interval_sec"`
@@ -17,14 +15,12 @@ type AppConfig struct {
 	WifiSampleEnabled bool    `json:"wifi_sample_enabled"`
 }
 
-// AppConfigSingletonID is the row id of the singleton app_config row.
-// The table is enforced by application code to hold exactly one row.
+// AppConfigSingletonID — app_config holds exactly one row, enforced in code.
 const AppConfigSingletonID = 1
 
-// GetAppConfig returns the singleton config row. Caller must have called
-// SeedAppConfig once at startup.
-func GetAppConfig(ctx context.Context, client *ent.Client) (AppConfig, error) {
-	row, err := client.AppConfig.Get(ctx, AppConfigSingletonID)
+// GetAppConfig returns the singleton app_config row.
+func (s *Store) GetAppConfig(ctx context.Context) (AppConfig, error) {
+	row, err := s.client.AppConfig.Get(ctx, AppConfigSingletonID)
 	if err != nil {
 		return AppConfig{}, err //nolint:wrapcheck // wrapped at IPC boundary
 	}
@@ -40,10 +36,9 @@ func GetAppConfig(ctx context.Context, client *ent.Client) (AppConfig, error) {
 	}, nil
 }
 
-// UpdateAppConfig applies a partial patch. Each pointer is optional — nil
-// means "leave unchanged". Returns the new full config.
-func UpdateAppConfig(ctx context.Context, client *ent.Client, patch AppConfigPatch) (AppConfig, error) {
-	upd := client.AppConfig.UpdateOneID(AppConfigSingletonID)
+// UpdateAppConfig applies a partial patch (nil fields untouched) and returns the new full config.
+func (s *Store) UpdateAppConfig(ctx context.Context, patch AppConfigPatch) (AppConfig, error) {
+	upd := s.client.AppConfig.UpdateOneID(AppConfigSingletonID)
 	if patch.PingIntervalSec != nil {
 		upd.SetPingIntervalSec(*patch.PingIntervalSec)
 	}
@@ -77,11 +72,10 @@ func UpdateAppConfig(ctx context.Context, client *ent.Client, patch AppConfigPat
 		return AppConfig{}, err //nolint:wrapcheck // wrapped at IPC boundary
 	}
 
-	return GetAppConfig(ctx, client)
+	return s.GetAppConfig(ctx)
 }
 
-// AppConfigPatch is the partial-update payload — pointers so unset fields
-// can be distinguished from intentional zeros.
+// AppConfigPatch — pointer fields distinguish "unset" from intentional zero.
 type AppConfigPatch struct {
 	PingIntervalSec   *float64 `json:"ping_interval_sec,omitempty"`
 	FlushIntervalSec  *int     `json:"flush_interval_sec,omitempty"`

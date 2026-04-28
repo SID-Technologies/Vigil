@@ -1,12 +1,4 @@
-// Package app orchestrates the Vigil sidecar's lifetime. The sidecar is a
-// single long-running process spawned by the Tauri shell. It:
-//
-//  1. Initializes file-based logging under --data-dir
-//  2. Watches the parent PID and exits if Tauri dies (orphan protection)
-//  3. Opens the SQLite DB via Ent, runs schema migration, seeds defaults
-//  4. Loads app_config and starts the monitor goroutines
-//  5. Wires the stdio JSON-RPC IPC server on stdin/stdout
-//  6. Blocks until the parent closes stdin (clean shutdown) or SIGTERM/SIGINT
+// Package app is the Vigil sidecar entry point.
 package app
 
 import (
@@ -32,7 +24,7 @@ import (
 	vlog "github.com/sid-technologies/vigil/pkg/log"
 )
 
-// Run is the sidecar entry point. Returns a process exit code.
+// Run executes the sidecar and returns a process exit code.
 func Run() int {
 	dataDir := flag.String("data-dir", "", "Directory for SQLite DB, logs, and cached settings (required)")
 	devMode := flag.Bool("dev", false, "Log to stderr instead of <data-dir>/vigil.log (for `go run`)")
@@ -43,8 +35,7 @@ func Run() int {
 		vlog.InitializeLoggerStderr()
 	} else {
 		if *dataDir == "" {
-			// Can't log to file yet, can't log to stdout (IPC). Stderr is the
-			// only safe channel.
+			// stdout is reserved for IPC, no log file yet — stderr only.
 			_, _ = os.Stderr.WriteString("vigil-sidecar: --data-dir is required (or pass --dev)\n")
 			return 2
 		}
@@ -62,7 +53,6 @@ func Run() int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// SIGTERM/SIGINT — graceful shutdown.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
@@ -72,10 +62,9 @@ func Run() int {
 		cancel()
 	}()
 
-	// Parent-PID watcher — if Tauri dies without cleaning up, exit ourselves.
+	// Tauri parent dies → we reparent to PID 1 → exit ourselves to avoid zombies.
 	go watchParent(ctx, cancel)
 
-	// Storage layer.
 	client, err := db.Open(ctx, *dataDir)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to open database")
@@ -84,26 +73,27 @@ func Run() int {
 
 	defer func() { _ = client.Close() }()
 
-	err = storage.SeedDefaultTargets(ctx, client)
+	store := storage.NewStore(client)
+
+	err = store.SeedDefaultTargets(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to seed default targets")
 		return 1
 	}
 
-	err = storage.SeedAppConfig(ctx, client)
+	err = store.SeedAppConfig(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to seed app_config")
 		return 1
 	}
 
-	cfg, err := storage.GetAppConfig(ctx, client)
+	cfg, err := store.GetAppConfig(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load app_config")
 		return 1
 	}
 
-	// Monitor — built early so the IPC config handler can hot-reload it.
-	probeList, err := storage.ListEnabledProbes(ctx, client)
+	probeList, err := store.ListEnabledProbes(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load enabled probes")
 		return 1
@@ -116,15 +106,12 @@ func Run() int {
 		WifiSampleEnabled: cfg.WifiSampleEnabled,
 	})
 
-	// IPC server.
 	srv := ipc.NewServer(os.Stdin, os.Stdout)
 	ipc.RegisterCoreHandlers(srv)
-	ipc.RegisterTargetHandlers(srv, client)
-	ipc.RegisterSampleHandlers(srv, client)
-	ipc.RegisterWifiHandlers(srv, client)
-	ipc.RegisterConfigHandlers(srv, client, func(c storage.AppConfig) {
-		// Hot-reload — the monitor's running probe loop and flusher pick up
-		// the new values on their next iteration. No sidecar restart needed.
+	ipc.RegisterTargetHandlers(srv, store)
+	ipc.RegisterSampleHandlers(srv, store)
+	ipc.RegisterWifiHandlers(srv, store)
+	ipc.RegisterConfigHandlers(srv, store, func(c storage.AppConfig) {
 		mon.UpdateConfig(monitor.Config{
 			PingIntervalSec:   c.PingIntervalSec,
 			FlushIntervalSec:  c.FlushIntervalSec,
@@ -138,34 +125,26 @@ func Run() int {
 			Bool("wifi_sample_enabled", c.WifiSampleEnabled).
 			Msg("monitor config hot-reloaded")
 	})
-	ipc.RegisterOutageHandlers(srv, client)
-	ipc.RegisterReportHandlers(srv, client)
+	ipc.RegisterOutageHandlers(srv, store)
+	ipc.RegisterReportHandlers(srv, store)
 
-	// Outage detector — fed by the monitor's per-cycle callback.
+	// Tauri 2 event-name validator rejects `.` — only [-/:_] allowed.
 	detector := outages.New(client, func(name string, data any) {
-		// Note: Tauri 2 event-name validator rejects `.` — only [-/:_] allowed.
 		srv.Emit(name, data)
 	})
 	probeList = mon.AddDynamicGatewayProbe(probeList)
 	mon.SetProbes(probeList)
 
-	// Wire the cycle event AFTER detector + srv exist. Both consume the same
-	// per-cycle event; the detector mutates DB state, the IPC emit relays
-	// to the live UI.
+	// Wire after detector + srv exist; detector mutates DB, srv relays to UI.
 	mon.SetOnCycle(func(ev monitor.CycleEvent) {
-		// Forward to the frontend AND feed the outage detector. Both consume
-		// the same per-cycle event; the detector mutates DB state, the IPC
-		// emit just relays for the live UI.
 		srv.Emit("probe:cycle", ev)
 		detector.OnCycle(ctx, ev)
 	})
 
-	// Aggregator + retention pruner — both run independently of monitor cadence.
 	agg := aggregator.New(client)
 	pruner := retention.New(client)
 
-	// Run all four background workers + IPC server. wg ensures we don't return
-	// (and trigger client.Close via defer) until everyone has stopped.
+	// wg.Wait blocks the deferred client.Close until every worker has stopped.
 	var wg sync.WaitGroup
 
 	wg.Go(func() {
@@ -194,15 +173,10 @@ func Run() int {
 	return 0
 }
 
-// watchParent polls the parent PID. When the parent (Tauri shell) dies, this
-// process is reparented to PID 1 (or the equivalent on Windows). Detecting
-// that and canceling ctx ensures the sidecar doesn't outlive its host as a
-// zombie consuming CPU.
+// watchParent cancels ctx when the original parent PID changes (Tauri died and we got reparented).
 func watchParent(ctx context.Context, cancel context.CancelFunc) {
 	startParent := os.Getppid()
 	if startParent <= 1 {
-		// We were already orphaned at startup, or started directly from a
-		// shell. Skip the watcher.
 		return
 	}
 

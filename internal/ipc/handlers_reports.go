@@ -5,16 +5,15 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/internal/reports"
+	"github.com/sid-technologies/vigil/internal/storage"
 )
 
-// Window guard: we cap requests at 90 days to prevent the user from
-// accidentally requesting "last 10 years" and pulling 30M raw rows.
+// Cap report windows at 90 days; otherwise a "last 10 years" request scans ~30M raw rows.
 const maxReportWindowMs int64 = 90 * 24 * 60 * 60 * 1000
 
-// RegisterReportHandlers wires the report.generate IPC method.
-func RegisterReportHandlers(s *Server, client *ent.Client) {
+// RegisterReportHandlers wires report.generate.
+func RegisterReportHandlers(s *Server, store *storage.Store) {
 	s.Register("report.generate", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p reportGenerateParams
 
@@ -40,7 +39,7 @@ func RegisterReportHandlers(s *Server, client *ent.Client) {
 			return nil, &Error{Code: "invalid_params", Message: "at least one format required"}
 		}
 
-		res, err := reports.Generate(ctx, client, reports.GenerateParams{
+		res, err := reports.Generate(ctx, store.Client(), reports.GenerateParams{
 			OutDir:   p.OutDir,
 			FromMs:   p.FromMs,
 			ToMs:     p.ToMs,
@@ -68,7 +67,7 @@ func parseFormats(in []string) reports.Format {
 		case "html":
 			f |= reports.FormatHTML
 		default:
-			// unknown format names silently ignored
+			// unknown formats silently dropped
 		}
 	}
 

@@ -1,14 +1,4 @@
-// Package reports renders shareable artifacts (CSV / JSON / HTML) from raw
-// probe samples.
-//
-// Used by the IPC `report.generate` method when the user clicks "Generate
-// report" on the History page. Output goes to a user-chosen directory; we
-// never write to anywhere the user didn't explicitly ask for.
-//
-// HTML format mirrors the legacy Python tool's report.html.j2 — same
-// structure, ported to Go's html/template, restyled to match Vigil's
-// Night Watch palette. Chart.js is loaded from the public CDN, so an
-// offline reader sees a no-charts fallback (the tables remain readable).
+// Package reports renders shareable artifacts (CSV / JSON / HTML) from raw probe samples.
 package reports
 
 import (
@@ -23,7 +13,7 @@ import (
 	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
-// Format names accepted by the generator. Combine with bitwise OR.
+// Format selects report outputs. Combine with bitwise OR.
 type Format int
 
 // Format flags, OR'd together to select report outputs.
@@ -33,8 +23,6 @@ const (
 	FormatHTML
 )
 
-// outDirPerm is the permission applied to the user-chosen output directory.
-// 0o750 keeps "group-readable, world-blind" — tighter than the default 0o755.
 const outDirPerm = 0o750
 
 // GenerateParams configures one report run.
@@ -52,12 +40,9 @@ type Result struct {
 	Paths []string `json:"paths"`
 }
 
-// Generate writes the requested formats. Always returns the absolute paths
-// of every successfully written file so the IPC caller can show "wrote N
-// files at /path/to/foo" toasts.
-//
-// Partial success is fine — if HTML rendering fails but CSV/JSON were
-// already written, we keep them and surface a non-fatal error message.
+// Generate writes the requested formats and returns the paths actually
+// written. On partial failure, already-written paths are kept and an error
+// is returned so the caller can surface both.
 func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result, error) {
 	if p.OutDir == "" {
 		return Result{}, errors.New("out_dir is required")
@@ -81,11 +66,10 @@ func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result
 		base = "vigil-report-" + time.Now().Format("2006-01-02T15-04")
 	}
 
-	// Reports always pull RAW samples. They're meant for the "show the ISP
-	// hard evidence" use case where every probe matters. If the window is
-	// large the response will be too — but the IPC handler validates window
-	// size before calling us.
-	samples, err := storage.QuerySamples(ctx, client, storage.QuerySamplesParams{
+	store := storage.NewStore(client)
+
+	// Reports pull raw samples; the IPC handler validates window size first.
+	samples, err := store.QuerySamples(ctx, storage.QuerySamplesParams{
 		FromMs:       p.FromMs,
 		ToMs:         p.ToMs,
 		TargetLabels: p.Targets,
@@ -95,12 +79,12 @@ func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result
 		return Result{}, errors.Wrap(err, "load samples")
 	}
 
-	wifi, err := storage.QueryWifiSamples(ctx, client, p.FromMs, p.ToMs)
+	wifi, err := store.QueryWifiSamples(ctx, p.FromMs, p.ToMs)
 	if err != nil {
 		return Result{}, errors.Wrap(err, "load wifi samples")
 	}
 
-	outages, err := storage.QueryOutages(ctx, client, storage.QueryOutagesParams{
+	outages, err := store.QueryOutages(ctx, storage.QueryOutagesParams{
 		FromMs: p.FromMs,
 		ToMs:   p.ToMs,
 	})
@@ -148,8 +132,6 @@ func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result
 	return Result{Paths: paths}, nil
 }
 
-// writeJSON serializes the structured report payload (summary + raw samples
-// + outages + wifi). Pretty-printed for human inspection.
 func writeJSON(path string, rep *report) (err error) {
 	f, err := os.Create(path) //nolint:gosec // path supplied by user via report export UI
 	if err != nil {
