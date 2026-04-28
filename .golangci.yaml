@@ -1,0 +1,138 @@
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.25.0"
+  concurrency: 8
+
+linters:
+  default: all
+  disable:
+    - cyclop
+    - depguard
+    - err113
+    - exhaustruct
+    - funlen
+    - gochecknoglobals
+    - gocognit
+    - godox
+    - godoclint
+    - gomoddirectives
+    - interfacebloat
+    - intrange
+    - ireturn
+    - lll
+    - mnd
+    - prealloc
+    - predeclared
+    - tagliatelle
+    - varnamelen
+    - wsl
+    - paralleltest
+    - unqueryvet # Designed for SQLBoiler, not Ent ORM — false positives on every query
+
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    forbidigo:
+      forbid:
+        - pattern: 'fmt\.Print.*(# Avoid debug logging)?'
+        - pattern: 'fmt\.Errorf.*(# Prefer pkg/errors.Wrap)?'
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    misspell:
+      locale: US
+    nlreturn:
+      block-size: 2
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      severity: warning
+      enable-all-rules: true
+      rules:
+        # 0, 1, 2 aren't magic numbers — they're length-zero checks, counter
+        # inits, singleton IDs, loop bounds. Naming them as constants makes
+        # the code worse, not better. This matches revive's own documented
+        # default for the rule.
+        - name: add-constant
+          arguments:
+            - allow-ints: "0,1,2"
+              allow-floats: "0.0,1.0"
+              allow-strs: '""'
+              max-lit-count: "3"
+        - name: file-header
+          disabled: true
+        - name: max-public-structs
+          disabled: true
+        - name: banned-characters
+          disabled: true
+        - name: cognitive-complexity
+          disabled: true
+        - name: function-length
+          disabled: true
+        - name: function-result-limit
+          disabled: true
+        - name: cyclomatic
+          disabled: true
+        - name: argument-limit
+          disabled: true
+        - name: line-length-limit
+          disabled: true
+        - name: imports-blocklist
+          arguments:
+            - log
+            - errors
+            - github.com/pkg/errors
+            - github.com/stretchr/testify/assert
+            - golang.org/x/exp/slices
+            - golang.org/x/exp/maps
+        - name: unhandled-error
+          arguments:
+            - fmt.Printf
+            - fmt.Println
+        - name: max-control-nesting
+          arguments:
+            - 10
+    staticcheck:
+      checks:
+        - all
+
+  # Per-file rule overrides. Tests get extra leeway: literal timestamps,
+  # threshold counts, and fixture RTTs are idiomatic Go test fixtures and
+  # naming each one as a constant fights readability.
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - revive
+        text: "add-constant:"
+      - path: _test\.go
+        linters:
+          - dupl
+          - funlen
+          - gocyclo
+          - gocognit
+      # pkg/errors is a deliberate drop-in replacement for the stdlib errors
+      # package, so the package-name clash is intentional.
+      - path: pkg/errors/.*\.go
+        linters:
+          - revive
+        text: "var-naming: avoid package names that conflict with Go standard library"
+      # pkg/errors itself wraps stdlib errors and github.com/pkg/errors, so
+      # those imports inside the wrapper are intentional.
+      - path: pkg/errors/.*\.go
+        linters:
+          - revive
+        text: "imports-blocklist:"
+      # Ent schemas duplicate by design — codegen requires distinct types per
+      # table, and the field declarations land identical across rollup tiers.
+      - path: db/ent/schema/.*\.go
+        linters:
+          - dupl
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

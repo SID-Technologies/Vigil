@@ -1,0 +1,2 @@
+# Kept so the directory exists in git — the actual sidecar binaries are
+# produced by `scripts/build-sidecar.sh` and are gitignored.

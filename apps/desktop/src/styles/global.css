@@ -1,0 +1,117 @@
+/*
+  Global styles loaded once from main.tsx. Tamagui handles ~99% of styling
+  via its theme system; this file is for things that need raw CSS — keyframe
+  animations, ::selection styling, scrollbar tweaks.
+*/
+
+@keyframes vigil-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes vigil-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/*
+  Skeleton shimmer — a soft luminance pulse for loading placeholders. The
+  range stays inside the slate palette so blocks feel like quiet stand-ins
+  rather than attention magnets. 1.6s is slow enough to read as "waiting,"
+  not "alarming."
+*/
+@keyframes vigil-skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vigil-skeleton {
+    animation: none !important;
+    opacity: 0.7 !important;
+  }
+  /* Strip transitions globally for users with the OS preference set. */
+  *, *::before, *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+
+/* Subtle scrollbars matching the Night Watch aesthetic. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(139, 148, 158, 0.25);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(139, 148, 158, 0.45);
+  background-clip: padding-box;
+}
+/*
+  The little square where vertical and horizontal scrollbars meet. Without
+  this rule WebKit paints it pure white, which renders as a stark white box
+  on the bottom-right of any scrollable container. Match the page background.
+*/
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::selection {
+  background: var(--accentColor);
+  color: var(--accentColorContrast, #0b1116);
+}
+
+/*
+  Tabular numerals for metric values — RTT, percentiles, durations, counts.
+  Inter and Space Grotesk both ship tabular variants; turning this on stops
+  columns of numbers from jittering when digit widths differ. Used via
+  `className="vigil-num"` on Text components that render numbers.
+*/
+.vigil-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Disable iOS-style highlight on tap for cleaner clicks. */
+button, [role='button'] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+  Keyboard focus rings — :focus-visible fires only when the user navigated
+  via keyboard (Tab/Shift+Tab/Arrow), not when they clicked. So mouse users
+  don't see outlines, but Tab users get a clear amber ring on whatever's
+  focused. Color matches the watchfire accent for brand consistency.
+*/
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible,
+[role='switch']:focus-visible,
+[role='checkbox']:focus-visible,
+[role='link']:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accentColor, #e0a458);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Some elements (like Tamagui inputs) already have their own focus
+   treatment internally — for those, the global rule is fine because
+   the inner styling layers on top. */
+

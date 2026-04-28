@@ -1,32 +1,160 @@
-# Runtime output (may contain personal network data — never commit)
-logs/
-reports/
-test-logs/
-test-reports/
+# ============================================================================
+# Runtime output (may contain personal network data — NEVER commit)
+#
+# Anchored to repo root with a leading slash so they don't match nested
+# directories like internal/reports/ — that's our Go package, which CI
+# needs to compile.
+# ============================================================================
+/logs/
+/reports/
+/test-logs/
+/test-reports/
 
-# Secrets
+# Database files — Vigil's runtime DB lives in the OS user-data dir, not
+# the repo, but defense-in-depth in case anyone copies one in to debug.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ============================================================================
+# Secrets — code-signing keys, updater keys, env files
+# ============================================================================
 .env
 .env.*
 *.env
 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-build/
-dist/
+# Updater + code-signing keys (live in ~/.tauri/, NOT the repo, but block
+# accidental drops here too)
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*.cert
+vigil-updater-key
+vigil-updater-key.pub
+.tauri/
 
-# Virtualenv / uv
-.venv/
-.uv/
+# Misc dev secrets
+.secrets/
+secrets.txt
+.npmrc
 
-# Tooling caches
-.ruff_cache/
-.mypy_cache/
-.pytest_cache/
+# ============================================================================
+# Internal-only docs (kept locally, not shipped in the OSS repo)
+# ============================================================================
+.impeccable.md
 
-# IDE
+# ============================================================================
+# Go
+# ============================================================================
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspaces
+go.work
+go.work.sum
+
+# Go build output
+/dist
+
+# Vigil sidecar build artifacts (local builds — not the ones written into
+# apps/desktop/src-tauri/binaries/, which has its own rule below)
+/cmd/vigil-sidecar/vigil-sidecar
+/cmd/vigil-sidecar/vigil-sidecar.exe
+
+# ============================================================================
+# Node / pnpm
+# ============================================================================
+node_modules
+.pnp.js
+.eslintcache
+
+# Build artifacts
+*.tsbuildinfo
+
+# TypeScript declaration outputs
+packages/*/dist/
+packages/*/*.tsbuildinfo
+apps/*/dist/
+apps/*/*.tsbuildinfo
+
+# Vite
+apps/desktop/build/
+
+# ============================================================================
+# Tauri / Rust
+# ============================================================================
+# Cargo target dir for the desktop shell
+apps/desktop/src-tauri/target/
+
+# Auto-generated capability schemas
+apps/desktop/src-tauri/gen/schemas/
+
+# NOTE: Cargo.lock IS committed for binary applications (reproducible builds).
+# Don't add apps/desktop/src-tauri/Cargo.lock here.
+
+# Sidecar binaries are produced by build-sidecar.sh — do not commit them
+apps/desktop/src-tauri/binaries/*
+!apps/desktop/src-tauri/binaries/.gitkeep
+
+# Mobile + Microsoft Store icons that `cargo tauri icon` generates but
+# Vigil doesn't ship. Keep the desktop variants (32×32, 64×64, 128×128,
+# 128×128@2x, icon.png, icon.icns, icon.ico).
+apps/desktop/src-tauri/icons/Square*Logo.png
+apps/desktop/src-tauri/icons/StoreLogo.png
+apps/desktop/src-tauri/icons/android/
+apps/desktop/src-tauri/icons/ios/
+
+# Notarization / bundle build outputs (Tauri puts these under target/, but
+# explicit guards in case anyone runs notarytool from a different cwd)
+*.dmg
+*.pkg
+*.msi
+*.AppImage
+*.deb
+*.rpm
+
+# ============================================================================
+# Tamagui
+# ============================================================================
+.tamagui/
+
+# ============================================================================
+# Crash dumps / core files
+# ============================================================================
+core
+core.*
+*.core
+*.dmp
+
+# ============================================================================
+# Logs
+# ============================================================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================================================
+# Editors / OS
+# ============================================================================
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
+
+# Local scratch
+tmp/
+.tmp/

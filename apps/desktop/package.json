@@ -1,0 +1,41 @@
+{
+  "name": "@vigil/desktop",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "preview": "vite preview",
+    "vite:dev": "vite",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-native-web": "^0.21.2",
+    "tamagui": "2.0.0-rc.36",
+    "@tamagui/config": "2.0.0-rc.36",
+    "@tamagui/toast": "2.0.0-rc.36",
+    "@tamagui/native": "2.0.0-rc.36",
+    "@repo/configs": "workspace:*",
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-opener": "^2.2.0",
+    "@tauri-apps/plugin-shell": "^2.2.1",
+    "@tauri-apps/plugin-updater": "^2.0.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "@fontsource/inter": "*",
+    "@fontsource/space-grotesk": "*",
+    "react-router-dom": "^6.28.1",
+    "@tanstack/react-query": "^5.90.14",
+    "recharts": "^2.15.0"
+  },
+  "devDependencies": {
+    "vite": "^6.4.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^6.0.2",
+    "@tauri-apps/cli": "^2.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
+  }
+}
