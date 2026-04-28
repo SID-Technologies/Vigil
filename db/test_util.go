@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -11,10 +12,20 @@ import (
 
 	"github.com/sid-technologies/vigil/db/ent"
 
+	// modernc.org/sqlite registers the "sqlite" driver via init() — the
+	// blank import is the standard Go pattern for driver registration.
 	_ "modernc.org/sqlite"
 )
 
+// testDBCounter hands out unique DSNs so each test gets its own
+// isolated in-memory SQLite database.
 var testDBCounter atomic.Int64
+
+// migrateMu serializes Ent client creation + schema migration across
+// parallel tests. Atlas's setupTables/CopyTables internals share global
+// state and race when multiple tests run Schema.Create concurrently —
+// matching Torch's pattern in /Users/danflanagan/Documents/GitHub/Torch/db/test_util.go.
+var migrateMu sync.Mutex
 
 // decimalBase is the radix used by intToString below. Named so the call
 // site reads as base-10 conversion rather than a stray literal.
@@ -22,13 +33,16 @@ const decimalBase = 10
 
 // SetupTestEntClientDB returns an isolated in-memory SQLite Ent client for
 // the duration of the test. Each test gets its own database via a unique
-// `cache=shared` URI so parallel tests don't clobber each other. Schema
-// migrations run automatically; cleanup is registered with t.Cleanup.
+// `cache=shared` URI; migration runs under a package-level mutex so
+// `t.Parallel()` tests don't trip Atlas's non-thread-safe internals.
 func SetupTestEntClientDB(t *testing.T) *ent.Client {
 	t.Helper()
 
 	id := testDBCounter.Add(1)
 	dsn := "file:vigil_test_" + intToString(id) + "?mode=memory&cache=shared&_pragma=foreign_keys(1)"
+
+	migrateMu.Lock()
+	defer migrateMu.Unlock()
 
 	rawDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
