@@ -55,7 +55,7 @@ export function OutagesCard() {
           ))}
           {resolved.length > 5 ? (
             <Text fontSize={10} color="$color8" paddingLeft="$1">
-              +{resolved.length - 5} older outage{resolved.length - 5 === 1 ? '' : 's'} — view in History (phase 5)
+              +{resolved.length - 5} older outage{resolved.length - 5 === 1 ? '' : 's'} — see the Outages page for the full list
             </Text>
           ) : null}
         </YStack>
@@ -83,10 +83,10 @@ function OutageRow({ outage, live }: { outage: Outage; live: boolean }) {
       <Text fontSize={12} color="$color12" fontWeight={live ? '600' : '400'} flex={1}>
         {scopeLabel}
       </Text>
-      <Text fontSize={11} color="$color9">
+      <Text fontSize={11} color="$color9" className="vigil-num">
         {fmtDuration(durationSec)}
       </Text>
-      <Text fontSize={11} color="$color8">
+      <Text fontSize={11} color="$color8" className="vigil-num">
         {live ? `since ${start.toLocaleTimeString()}` : start.toLocaleString([], {
           month: 'short',
           day: 'numeric',

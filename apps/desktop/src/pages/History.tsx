@@ -374,27 +374,27 @@ function SummaryStats({
                   </Text>
                 </YStack>
                 <YStack width={90}>
-                  <Text fontSize={12} color={uptimeColor as any} fontWeight="600">
+                  <Text fontSize={12} color={uptimeColor as any} fontWeight="600" className="vigil-num">
                     {uptime.toFixed(2)}%
                   </Text>
                 </YStack>
                 <YStack width={80}>
-                  <Text fontSize={12} color="$color11">
+                  <Text fontSize={12} color="$color11" className="vigil-num">
                     {p50 == null ? '—' : `${p50.toFixed(1)}ms`}
                   </Text>
                 </YStack>
                 <YStack width={80}>
-                  <Text fontSize={12} color="$color11">
+                  <Text fontSize={12} color="$color11" className="vigil-num">
                     {p95 == null ? '—' : `${p95.toFixed(1)}ms`}
                   </Text>
                 </YStack>
                 <YStack width={80}>
-                  <Text fontSize={12} color="$color11">
+                  <Text fontSize={12} color="$color11" className="vigil-num">
                     {p99 == null ? '—' : `${p99.toFixed(1)}ms`}
                   </Text>
                 </YStack>
                 <YStack width={80}>
-                  <Text fontSize={12} color="$color9">
+                  <Text fontSize={12} color="$color9" className="vigil-num">
                     {e.count.toLocaleString()}
                   </Text>
                 </YStack>

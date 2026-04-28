@@ -27,7 +27,7 @@ interface TargetGridProps {
  *   - Mean RTT over last 5 min
  *   - Inline sparkline of last ~120 RTT points
  *   - Colored ring matching the target's chart-line color when selected
- *   - ↗ "open detail" affordance (navigates to /history?target=…, lands in phase 5)
+ *   - ↗ "open detail" affordance (navigates to /history?target=…)
  *
  * The summary stats come from a rolling buffer fed by probe:cycle events
  * (useLiveSamples). No DB query — the page feels live because it IS live.
@@ -182,7 +182,7 @@ function TargetTile({
             {error ?? 'fail'}
           </Text>
         ) : rtt_ms != null ? (
-          <Text fontSize={14} color="$color12" fontWeight="600">
+          <Text fontSize={14} color="$color12" fontWeight="600" className="vigil-num">
             {rtt_ms.toFixed(1)}
             <Text fontSize={10} color="$color9">
               {' '}
@@ -199,11 +199,11 @@ function TargetTile({
 
       {/* 5-min summary footer — always rendered so layout is stable. */}
       <XStack justifyContent="space-between">
-        <Text fontSize={10} color="$color9">
+        <Text fontSize={10} color="$color9" className="vigil-num">
           {successPct == null ? '— %' : `${successPct.toFixed(0)}%`}
           <Text color="$color8"> 5m</Text>
         </Text>
-        <Text fontSize={10} color="$color9">
+        <Text fontSize={10} color="$color9" className="vigil-num">
           {avgRTT == null ? '—' : `${avgRTT.toFixed(0)}ms`}
           <Text color="$color8"> avg</Text>
         </Text>

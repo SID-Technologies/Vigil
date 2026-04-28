@@ -36,6 +36,11 @@
     animation: none !important;
     opacity: 0.7 !important;
   }
+  /* Strip transitions globally for users with the OS preference set. */
+  *, *::before, *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
 }
 
 /* Subtle scrollbars matching the Night Watch aesthetic. */
@@ -60,6 +65,17 @@
 ::selection {
   background: var(--accentColor);
   color: var(--accentColorContrast, #0b1116);
+}
+
+/*
+  Tabular numerals for metric values — RTT, percentiles, durations, counts.
+  Inter and Space Grotesk both ship tabular variants; turning this on stops
+  columns of numbers from jittering when digit widths differ. Used via
+  `className="vigil-num"` on Text components that render numbers.
+*/
+.vigil-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 /* Disable iOS-style highlight on tap for cleaner clicks. */

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Vigil — Network Reliability Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b1116;
+    --surface: #11181f;
+    --surface-2: #161d26;
+    --border: #1f2933;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --good: #56d364;
+    --bad: #f85149;
+    --warn: #d29922;
+    --accent: #e0a458;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 24px;
+    line-height: 1.5;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { margin: 0 0 4px 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .subtitle { color: var(--muted); margin-bottom: 32px; font-size: 13px; }
+  .verdict {
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    border: 1px solid;
+  }
+  .verdict.bad { background: rgba(248, 81, 73, 0.06); border-color: rgba(248, 81, 73, 0.3); }
+  .verdict.warn { background: rgba(210, 153, 34, 0.06); border-color: rgba(210, 153, 34, 0.3); }
+  .verdict.good { background: rgba(86, 211, 100, 0.06); border-color: rgba(86, 211, 100, 0.3); }
+  .verdict-title { font-weight: 700; margin-bottom: 4px; letter-spacing: 0.3px; }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .kpi {
+    background: var(--surface);
+    padding: 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+  }
+  .kpi.bad { border-left-color: var(--bad); }
+  .kpi.warn { border-left-color: var(--warn); }
+  .kpi.good { border-left-color: var(--good); }
+  .kpi-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+  .kpi-value { font-size: 28px; font-weight: 700; margin: 6px 0 2px 0; font-variant-numeric: tabular-nums; }
+  .kpi-sub { color: var(--muted); font-size: 12px; }
+  .card {
+    background: var(--surface);
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    border: 1px solid var(--border);
+  }
+  .card h2 { margin: 0 0 4px 0; font-size: 15px; font-weight: 600; letter-spacing: 0.2px; }
+  .card .card-sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+  .chart-container { position: relative; height: 280px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr:last-child td { border-bottom: none; }
+  td.num { text-align: right; }
+  td.success { color: var(--good); font-weight: 600; }
+  td.warn-pct { color: var(--warn); font-weight: 600; }
+  td.bad-pct { color: var(--bad); font-weight: 600; }
+  .footer { color: var(--muted); font-size: 11px; text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .badge.outage { background: rgba(248, 81, 73, 0.15); color: var(--bad); }
+  .badge.network { background: rgba(210, 153, 34, 0.15); color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Vigil — Network Reliability Report</h1>
+  <div class="subtitle">
+    Generated {{.Report.GeneratedAt}} · window {{.Report.WindowStart}} → {{.Report.WindowEnd}} ({{fmtFloat .Report.WindowHours}} hours)
+  </div>
+
+  <div class="verdict {{verdict .Report.Summary.UptimePct .Report.Summary.OutageCount}}">
+    <div class="verdict-title">VERDICT</div>
+    {{verdictText .Report.Summary.UptimePct .Report.Summary.OutageCount}}
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi {{verdict .Report.Summary.UptimePct .Report.Summary.OutageCount}}">
+      <div class="kpi-label">Uptime</div>
+      <div class="kpi-value">{{fmtPct .Report.Summary.UptimePct}}</div>
+      <div class="kpi-sub">{{.Report.Summary.TotalSuccess}} / {{.Report.TotalSamples}} probes succeeded</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Mean RTT</div>
+      <div class="kpi-value">{{fmtMs .Report.Summary.MeanRTTMs}}</div>
+      <div class="kpi-sub">across all targets</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">P95 RTT</div>
+      <div class="kpi-value">{{fmtMs .Report.Summary.P95RTTMs}}</div>
+      <div class="kpi-sub">95th percentile latency</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">P99 RTT</div>
+      <div class="kpi-value">{{fmtMs .Report.Summary.P99RTTMs}}</div>
+      <div class="kpi-sub">99th percentile latency</div>
+    </div>
+    <div class="kpi {{if gt .Report.Summary.OutageCount 0}}bad{{end}}">
+      <div class="kpi-label">Outages</div>
+      <div class="kpi-value">{{.Report.Summary.OutageCount}}</div>
+      <div class="kpi-sub">
+        {{.Report.Summary.OutageNetwork}} network · {{.Report.Summary.OutageTargets}} target
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Hourly trend</h2>
+    <div class="card-sub">Median RTT (p50) and uptime % per hour, across all targets.</div>
+    <div class="chart-container">
+      <canvas id="hourly-chart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Per-target breakdown</h2>
+    <div class="card-sub">Latency percentiles, jitter, uptime, and outage count for each probe target in the window.</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Target</th>
+          <th>Kind</th>
+          <th class="num">Probes</th>
+          <th class="num">Uptime</th>
+          <th class="num">P50</th>
+          <th class="num">P95</th>
+          <th class="num">P99</th>
+          <th class="num">Max</th>
+          <th class="num">Jitter</th>
+          <th class="num">Outages</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Report.PerTarget}}
+        <tr>
+          <td><strong>{{.Label}}</strong><br><span style="color:var(--muted);font-size:11px">{{.Host}}{{if .Port}}:{{.Port}}{{end}}</span></td>
+          <td>{{.Kind}}</td>
+          <td class="num">{{.Total}}</td>
+          <td class="num {{if lt .UptimePct 95.0}}bad-pct{{else if lt .UptimePct 99.5}}warn-pct{{else}}success{{end}}">{{fmtPct .UptimePct}}</td>
+          <td class="num">{{fmtMs .P50Ms}}</td>
+          <td class="num">{{fmtMs .P95Ms}}</td>
+          <td class="num">{{fmtMs .P99Ms}}</td>
+          <td class="num">{{fmtMs .MaxMs}}</td>
+          <td class="num">{{fmtMs .JitterMs}}</td>
+          <td class="num">{{if gt .OutageBursts 0}}<span class="badge outage">{{.OutageBursts}}</span>{{else}}0{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  {{if gt (len .Report.Outages) 0}}
+  <div class="card">
+    <h2>Outage events</h2>
+    <div class="card-sub">3+ consecutive failures of the same scope (network = every probe failing simultaneously).</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Scope</th>
+          <th>Start (UTC)</th>
+          <th>End (UTC)</th>
+          <th class="num">Cycles failed</th>
+          <th>Errors</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Report.Outages}}
+        <tr>
+          <td>
+            {{if eq .Scope "network"}}
+              <span class="badge network">NETWORK</span>
+            {{else}}
+              {{replace .Scope "target:" ""}}
+            {{end}}
+          </td>
+          <td>{{.StartTsUnixMs}}</td>
+          <td>{{if .EndTsUnixMs}}{{.EndTsUnixMs}}{{else}}<em style="color:var(--bad)">ongoing</em>{{end}}</td>
+          <td class="num">{{.ConsecutiveFailures}}</td>
+          <td>
+            {{range $code, $count := .Errors}}
+              <span class="badge" style="background:var(--surface-2);color:var(--muted);margin-right:4px">{{$code}} ×{{$count}}</span>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+
+  <div class="footer">
+    Generated by Vigil — continuous network reliability monitor.
+  </div>
+</div>
+
+<script>
+  const data = {{.ChartJSON}};
+  const ctx = document.getElementById('hourly-chart');
+  if (ctx && typeof Chart !== 'undefined') {
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.hours,
+        datasets: [
+          {
+            label: 'Median RTT (ms)',
+            data: data.median,
+            borderColor: '#e0a458',
+            backgroundColor: 'rgba(224, 164, 88, 0.15)',
+            yAxisID: 'y',
+            tension: 0.3,
+            fill: true,
+          },
+          {
+            label: 'P95 RTT (ms)',
+            data: data.p95,
+            borderColor: '#5b9bd5',
+            backgroundColor: 'rgba(91, 155, 213, 0.05)',
+            yAxisID: 'y',
+            tension: 0.3,
+            borderDash: [4, 4],
+          },
+          {
+            label: 'Uptime %',
+            data: data.uptime_pct,
+            borderColor: '#56d364',
+            backgroundColor: 'rgba(86, 211, 100, 0.05)',
+            yAxisID: 'y1',
+            tension: 0.3,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#e6edf3' } },
+        },
+        scales: {
+          x: { ticks: { color: '#8b949e' }, grid: { color: '#1f2933' } },
+          y: {
+            position: 'left',
+            ticks: { color: '#8b949e' },
+            grid: { color: '#1f2933' },
+            title: { display: true, text: 'RTT (ms)', color: '#8b949e' },
+          },
+          y1: {
+            position: 'right',
+            min: 0,
+            max: 100,
+            ticks: { color: '#8b949e' },
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: 'Uptime %', color: '#8b949e' },
+          },
+        },
+      },
+    });
+  }
+</script>
+</body>
+</html>

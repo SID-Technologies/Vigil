@@ -33,7 +33,21 @@
       "Bash(chmod +x *)",
       "Bash(grep -rn '\\\\$accentBackground\\\\|\\\\$red10\\\\|\\\\$yellow10\\\\|\\\\$accentColor\\\\|color=\"\\\\$red' /Users/danflanagan/Documents/GitHub/PingScrapper/apps/desktop/src/)",
       "Bash(npx tsc *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(pnpm tsc *)",
+      "Bash(go build *)",
+      "Read(//Users/danflanagan/Library/pnpm/**)",
+      "Bash(pnpm exec *)",
+      "Bash(/Users/danflanagan/Documents/GitHub/PingScrapper/apps/desktop/node_modules/.bin/tsc --version)",
+      "Bash(/Users/danflanagan/Documents/GitHub/PingScrapper/apps/desktop/node_modules/.bin/tsc --noEmit)",
+      "Read(//tmp/**)",
+      "Bash(cp tsconfig.json /tmp/tsconfig.bak)",
+      "Bash(sed -i '' 's/\"strict\": true/\"strict\": false/' tsconfig.json)",
+      "Bash(cp /tmp/tsconfig.bak tsconfig.json)",
+      "Bash(grep -rn 'color=\"\\\\$' /Users/danflanagan/Documents/GitHub/Pugio/apps/web/src --include=\"*.tsx\")",
+      "Bash(grep -rn 'Button[^>]*color=\"\\\\$' /Users/danflanagan/Documents/GitHub/Pugio/apps/web/src --include=\"*.tsx\")"
     ]
   }
 }

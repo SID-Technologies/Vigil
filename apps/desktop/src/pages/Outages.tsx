@@ -236,13 +236,13 @@ function OutageRow({
         <Text fontSize={13} color="$color12" fontWeight={live ? '600' : '500'} flex={1}>
           {scopeLabel}
         </Text>
-        <Text fontSize={11} color="$color9">
+        <Text fontSize={11} color="$color9" className="vigil-num">
           {outage.consecutive_failures} consecutive failures
         </Text>
-        <Text fontSize={11} color="$color11" fontWeight="600">
+        <Text fontSize={11} color="$color11" fontWeight="600" className="vigil-num">
           {fmtDuration(durationSec)}
         </Text>
-        <Text fontSize={11} color="$color8">
+        <Text fontSize={11} color="$color8" className="vigil-num">
           {live ? 'since' : ''}{' '}
           {start.toLocaleString([], {
             month: 'short',
@@ -292,7 +292,7 @@ function OutageRow({
                       <Text fontSize={11} color="$color11" fontFamily="$body">
                         {code}
                       </Text>
-                      <Text fontSize={11} color="$color8">
+                      <Text fontSize={11} color="$color8" className="vigil-num">
                         ×{count}
                       </Text>
                     </XStack>
@@ -324,6 +324,7 @@ function DetailField({
         fontSize={11}
         color={tone === 'warn' ? '$red10' : '$color11'}
         fontFamily="$body"
+        className="vigil-num"
       >
         {value}
       </Text>

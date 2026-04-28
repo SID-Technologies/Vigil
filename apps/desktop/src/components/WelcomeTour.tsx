@@ -23,9 +23,9 @@ const STEPS: Step[] = [
     Icon: Eye,
   },
   {
-    title: 'Click any tile for the full story',
+    title: 'Two ways to drill in',
     body:
-      "Each tile on the dashboard is a doorway. Click one to jump to History — same target, longer window, full latency curve and percentiles. Use it when you want to know whether tonight's stutter is a pattern or a fluke.",
+      "Click a tile to focus the chart above on that target — handy for comparing one path against another. Click the small ↗ in a tile's corner to jump to History, where you'll see the full latency curve and percentiles over a longer window.",
     Icon: ArrowSquareOut,
   },
   {
@@ -123,7 +123,10 @@ export function WelcomeTour() {
                   height={4}
                   borderRadius={999}
                   backgroundColor={i <= step ? '$accentBackground' : '$color5'}
-                  animation="quick"
+                  // CSS transition (instead of Tamagui animation) so the
+                  // global prefers-reduced-motion rule in global.css can
+                  // disable it without a JS-side guard.
+                  style={{ transition: 'width 200ms ease-out, background-color 200ms ease-out' }}
                 />
               ))}
             </XStack>

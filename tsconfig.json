@@ -22,9 +22,9 @@
       "@repo/configs/*": ["./packages/configs/src/*"]
     }
   },
+  "files": [],
   "references": [
-    { "path": "./apps/desktop" },
     { "path": "./packages/configs" }
   ],
-  "exclude": ["node_modules", "dist", "build", "**/*.d.ts"]
+  "exclude": ["node_modules", "dist", "build", "**/*.d.ts", "apps/desktop"]
 }

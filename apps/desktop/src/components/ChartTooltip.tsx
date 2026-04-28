@@ -90,7 +90,13 @@ export function ChartTooltip({ active, payload, label, formatLabel, unit = 'ms',
               }}
             />
             <span style={{ flex: 1, color: 'var(--color11)' }}>{String(r.name ?? r.dataKey)}</span>
-            <span style={{ color: 'var(--color12)', fontWeight: 600 }}>
+            <span
+              style={{
+                color: 'var(--color12)',
+                fontWeight: 600,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
               {Number(r.value).toFixed(2)} {unit}
             </span>
           </div>

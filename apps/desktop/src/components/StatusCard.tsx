@@ -52,14 +52,14 @@ export function StatusCard() {
           <Text fontSize={11} color="$color9">
             sidecar
           </Text>
-          <Text fontSize={11} color="$color11" fontWeight="600">
+          <Text fontSize={11} color="$color11" fontWeight="600" className="vigil-num">
             {health.isError
               ? 'disconnected'
               : health.data
                 ? `v${health.data.version}${health.data.commit ? ` (${health.data.commit})` : ''}`
                 : '…'}
           </Text>
-          <Text fontSize={10} color="$color8">
+          <Text fontSize={10} color="$color8" className="vigil-num">
             {count} cycle{count === 1 ? '' : 's'} since open
           </Text>
         </YStack>

@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Folder } from '@phosphor-icons/react';
+import { Folder, Compass, Keyboard } from '@phosphor-icons/react';
 import { Button, Input, XStack, YStack, Text } from 'tamagui';
 
 import { FormField } from '../components/FormField';
+import { openShortcuts } from '../components/KeyboardShortcuts';
 import { PageHeader } from '../components/PageHeader';
 import { Section } from '../components/Section';
+import { Skeleton } from '../components/Skeleton';
 import { Toggle } from '../components/Toggle';
+import { resetWelcomeTour } from '../components/WelcomeTour';
 import { useAppConfig, useUpdateConfig } from '../hooks/useAppConfig';
 import {
   CONFIG_BOUNDS,
@@ -75,8 +78,36 @@ export function SettingsPage() {
     return (
       <YStack flex={1}>
         <PageHeader title="Settings" />
-        <YStack padding="$4">
-          <Text fontSize={11} color="$color9">One moment…</Text>
+        <YStack
+          padding="$4"
+          paddingTop="$2"
+          maxWidth={760}
+          width="100%"
+          alignSelf="center"
+          gap="$5"
+        >
+          {[0, 1, 2].map((s) => (
+            <YStack key={s} paddingTop="$4" gap="$3">
+              <YStack
+                gap="$1"
+                paddingBottom="$2"
+                borderBottomWidth={1}
+                borderBottomColor="$borderColor"
+              >
+                <Skeleton width={120} height={11} />
+              </YStack>
+              <YStack gap="$3">
+                <YStack gap="$1.5">
+                  <Skeleton width={140} height={11} />
+                  <Skeleton width="100%" height={36} borderRadius={6} />
+                </YStack>
+                <YStack gap="$1.5">
+                  <Skeleton width={160} height={11} />
+                  <Skeleton width="100%" height={36} borderRadius={6} />
+                </YStack>
+              </YStack>
+            </YStack>
+          ))}
         </YStack>
       </YStack>
     );
@@ -296,8 +327,47 @@ export function SettingsPage() {
         >
           <DataFolderRow />
         </Section>
+
+        <Section
+          title="Help"
+          description="Replay the welcome tour or peek at the keyboard shortcuts."
+        >
+          <HelpRow />
+        </Section>
       </YStack>
     </YStack>
+  );
+}
+
+/**
+ * Two-button row for the Help section. Replays the welcome tour (clears the
+ * dismissed flag, then reloads so the App-level tour fires fresh) and opens
+ * the keyboard shortcut overlay (mirroring Shift+?).
+ */
+function HelpRow() {
+  const replayTour = () => {
+    resetWelcomeTour();
+    window.location.reload();
+  };
+  return (
+    <XStack gap="$2" flexWrap="wrap">
+      <Button
+        size="$3"
+        chromeless
+        icon={<Compass size={14} color="var(--color9)" />}
+        onPress={replayTour}
+      >
+        <Text fontSize={12} color="$color11">Show welcome tour again</Text>
+      </Button>
+      <Button
+        size="$3"
+        chromeless
+        icon={<Keyboard size={14} color="var(--color9)" />}
+        onPress={openShortcuts}
+      >
+        <Text fontSize={12} color="$color11">Keyboard shortcuts</Text>
+      </Button>
+    </XStack>
   );
 }
 

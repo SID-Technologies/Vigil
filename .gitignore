@@ -1,10 +1,14 @@
 # ============================================================================
 # Runtime output (may contain personal network data — NEVER commit)
+#
+# Anchored to repo root with a leading slash so they don't match nested
+# directories like internal/reports/ — that's our Go package, which CI
+# needs to compile.
 # ============================================================================
-logs/
-reports/
-test-logs/
-test-reports/
+/logs/
+/reports/
+/test-logs/
+/test-reports/
 
 # Database files — Vigil's runtime DB lives in the OS user-data dir, not
 # the repo, but defense-in-depth in case anyone copies one in to debug.
