@@ -2,6 +2,9 @@ package storage
 
 import (
 	"context"
+
+	"github.com/sid-technologies/vigil/db/ent"
+	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
 // AppConfig is the JSON view of the singleton app_config row.
@@ -18,11 +21,32 @@ type AppConfig struct {
 // AppConfigSingletonID — app_config holds exactly one row, enforced in code.
 const AppConfigSingletonID = 1
 
-// GetAppConfig returns the singleton app_config row.
-func (s *Store) GetAppConfig(ctx context.Context) (AppConfig, error) {
-	row, err := s.client.AppConfig.Get(ctx, AppConfigSingletonID)
+// AppConfigPatch — pointer fields distinguish "unset" from intentional zero.
+type AppConfigPatch struct {
+	PingIntervalSec   *float64 `json:"ping_interval_sec,omitempty"`
+	FlushIntervalSec  *int     `json:"flush_interval_sec,omitempty"`
+	PingTimeoutMs     *int     `json:"ping_timeout_ms,omitempty"`
+	RetentionRawDays  *int     `json:"retention_raw_days,omitempty"`
+	Retention1minDays *int     `json:"retention_1min_days,omitempty"`
+	Retention5minDays *int     `json:"retention_5min_days,omitempty"`
+	WifiSampleEnabled *bool    `json:"wifi_sample_enabled,omitempty"`
+}
+
+// ConfigClient owns the singleton app_config row.
+type ConfigClient struct {
+	client *ent.Client
+}
+
+// NewConfigClient wraps an Ent client.
+func NewConfigClient(client *ent.Client) *ConfigClient {
+	return &ConfigClient{client: client}
+}
+
+// Get returns the singleton app_config row.
+func (c *ConfigClient) Get(ctx context.Context) (AppConfig, error) {
+	row, err := c.client.AppConfig.Get(ctx, AppConfigSingletonID)
 	if err != nil {
-		return AppConfig{}, err //nolint:wrapcheck // wrapped at IPC boundary
+		return AppConfig{}, errors.Wrap(err, "failed to get app config")
 	}
 
 	return AppConfig{
@@ -36,9 +60,9 @@ func (s *Store) GetAppConfig(ctx context.Context) (AppConfig, error) {
 	}, nil
 }
 
-// UpdateAppConfig applies a partial patch (nil fields untouched) and returns the new full config.
-func (s *Store) UpdateAppConfig(ctx context.Context, patch AppConfigPatch) (AppConfig, error) {
-	upd := s.client.AppConfig.UpdateOneID(AppConfigSingletonID)
+// Update applies a partial patch (nil fields untouched) and returns the new full config.
+func (c *ConfigClient) Update(ctx context.Context, patch AppConfigPatch) (AppConfig, error) {
+	upd := c.client.AppConfig.UpdateOneID(AppConfigSingletonID)
 	if patch.PingIntervalSec != nil {
 		upd.SetPingIntervalSec(*patch.PingIntervalSec)
 	}
@@ -69,19 +93,8 @@ func (s *Store) UpdateAppConfig(ctx context.Context, patch AppConfigPatch) (AppC
 
 	_, err := upd.Save(ctx)
 	if err != nil {
-		return AppConfig{}, err //nolint:wrapcheck // wrapped at IPC boundary
+		return AppConfig{}, errors.Wrap(err, "failed to update app config")
 	}
 
-	return s.GetAppConfig(ctx)
-}
-
-// AppConfigPatch — pointer fields distinguish "unset" from intentional zero.
-type AppConfigPatch struct {
-	PingIntervalSec   *float64 `json:"ping_interval_sec,omitempty"`
-	FlushIntervalSec  *int     `json:"flush_interval_sec,omitempty"`
-	PingTimeoutMs     *int     `json:"ping_timeout_ms,omitempty"`
-	RetentionRawDays  *int     `json:"retention_raw_days,omitempty"`
-	Retention1minDays *int     `json:"retention_1min_days,omitempty"`
-	Retention5minDays *int     `json:"retention_5min_days,omitempty"`
-	WifiSampleEnabled *bool    `json:"wifi_sample_enabled,omitempty"`
+	return c.Get(ctx)
 }

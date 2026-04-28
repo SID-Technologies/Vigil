@@ -9,7 +9,7 @@ import (
 )
 
 // RegisterOutageHandlers wires outages.list. Defaults to the last 7 days.
-func RegisterOutageHandlers(s *Server, store *storage.Store) {
+func RegisterOutageHandlers(s *Server, store *storage.Client) {
 	s.Register("outages.list", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p outagesListParams
 
@@ -27,7 +27,7 @@ func RegisterOutageHandlers(s *Server, store *storage.Store) {
 			p.FromMs = p.ToMs - 7*24*60*60*1000
 		}
 
-		out, err := store.QueryOutages(ctx, storage.QueryOutagesParams{
+		out, err := store.Outages.Query(ctx, storage.QueryOutagesParams{
 			FromMs:   p.FromMs,
 			ToMs:     p.ToMs,
 			Scope:    p.Scope,

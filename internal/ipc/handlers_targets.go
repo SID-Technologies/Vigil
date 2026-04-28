@@ -9,9 +9,9 @@ import (
 )
 
 // RegisterTargetHandlers wires targets.list/create/update/delete.
-func RegisterTargetHandlers(s *Server, store *storage.Store) {
+func RegisterTargetHandlers(s *Server, store *storage.Client) {
 	s.Register("targets.list", func(ctx context.Context, _ json.RawMessage) (any, *Error) {
-		out, err := store.ListTargets(ctx)
+		out, err := store.Targets.List(ctx)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
@@ -41,7 +41,12 @@ func RegisterTargetHandlers(s *Server, store *storage.Store) {
 			return nil, &Error{Code: "invalid_params", Message: "unknown kind: " + p.Kind}
 		}
 
-		t, err := store.CreateTarget(ctx, p.Label, probes.Kind(p.Kind), p.Host, p.Port)
+		t, err := store.Targets.Create(ctx, storage.TargetRequest{
+			Label: p.Label,
+			Kind:  probes.Kind(p.Kind),
+			Host:  p.Host,
+			Port:  p.Port,
+		})
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
@@ -61,7 +66,7 @@ func RegisterTargetHandlers(s *Server, store *storage.Store) {
 			return nil, &Error{Code: "invalid_params", Message: "id required"}
 		}
 
-		existing, err := store.GetTarget(ctx, p.ID)
+		existing, err := store.Targets.Get(ctx, p.ID)
 		if err != nil {
 			return nil, &Error{Code: "not_found", Message: err.Error()}
 		}
@@ -71,7 +76,11 @@ func RegisterTargetHandlers(s *Server, store *storage.Store) {
 			return nil, &Error{Code: "builtin_immutable", Message: "builtin targets only allow toggling 'enabled'"}
 		}
 
-		t, err := store.UpdateTarget(ctx, p.ID, p.Enabled, p.Host, p.Port)
+		t, err := store.Targets.Update(ctx, p.ID, storage.TargetUpdateRequest{
+			Enabled: p.Enabled,
+			Host:    p.Host,
+			Port:    p.Port,
+		})
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
@@ -91,7 +100,7 @@ func RegisterTargetHandlers(s *Server, store *storage.Store) {
 			return nil, &Error{Code: "invalid_params", Message: "id required"}
 		}
 
-		existing, err := store.GetTarget(ctx, p.ID)
+		existing, err := store.Targets.Get(ctx, p.ID)
 		if err != nil {
 			return nil, &Error{Code: "not_found", Message: err.Error()}
 		}
@@ -100,7 +109,7 @@ func RegisterTargetHandlers(s *Server, store *storage.Store) {
 			return nil, &Error{Code: "builtin_immutable", Message: "builtin targets cannot be deleted; disable instead"}
 		}
 
-		err = store.DeleteTarget(ctx, p.ID)
+		err = store.Targets.Delete(ctx, p.ID)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}

@@ -11,9 +11,9 @@ import (
 type OnConfigChange func(cfg storage.AppConfig)
 
 // RegisterConfigHandlers wires config.get and config.update.
-func RegisterConfigHandlers(s *Server, store *storage.Store, onChange OnConfigChange) {
+func RegisterConfigHandlers(s *Server, store *storage.Client, onChange OnConfigChange) {
 	s.Register("config.get", func(ctx context.Context, _ json.RawMessage) (any, *Error) {
-		out, err := store.GetAppConfig(ctx)
+		out, err := store.Config.Get(ctx)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
@@ -29,7 +29,7 @@ func RegisterConfigHandlers(s *Server, store *storage.Store, onChange OnConfigCh
 			return nil, &Error{Code: "invalid_params", Message: err.Error()}
 		}
 
-		out, err := store.UpdateAppConfig(ctx, patch)
+		out, err := store.Config.Update(ctx, patch)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}

@@ -1,14 +1,6 @@
 package storage
 
-import (
-	"context"
-
-	"github.com/sid-technologies/vigil/db/ent"
-	"github.com/sid-technologies/vigil/db/ent/sample1h"
-	"github.com/sid-technologies/vigil/db/ent/sample1min"
-	"github.com/sid-technologies/vigil/db/ent/sample5min"
-)
-
+import "github.com/sid-technologies/vigil/db/ent"
 
 // AggregatedRow is the IPC shape shared across the 1min/5min/1h rollup tiers;
 // granularity is signaled by the response wrapper, not the row.
@@ -32,57 +24,6 @@ type QueryAggregatedParams struct {
 	FromMs       int64
 	ToMs         int64
 	TargetLabels []string
-}
-
-// Query1minSamples returns 1-minute rollup buckets in the window.
-func (s *Store) Query1minSamples(ctx context.Context, p QueryAggregatedParams) ([]AggregatedRow, error) {
-	q := s.client.Sample1min.Query().
-		Where(sample1min.BucketStartUnixMsGTE(p.FromMs), sample1min.BucketStartUnixMsLTE(p.ToMs)).
-		Order(ent.Asc(sample1min.FieldBucketStartUnixMs))
-	if len(p.TargetLabels) > 0 {
-		q = q.Where(sample1min.TargetLabelIn(p.TargetLabels...))
-	}
-
-	rows, err := q.All(ctx)
-	if err != nil {
-		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
-	}
-
-	return projectAggRows(rows), nil
-}
-
-// Query5minSamples returns 5-minute rollup buckets in the window.
-func (s *Store) Query5minSamples(ctx context.Context, p QueryAggregatedParams) ([]AggregatedRow, error) {
-	q := s.client.Sample5min.Query().
-		Where(sample5min.BucketStartUnixMsGTE(p.FromMs), sample5min.BucketStartUnixMsLTE(p.ToMs)).
-		Order(ent.Asc(sample5min.FieldBucketStartUnixMs))
-	if len(p.TargetLabels) > 0 {
-		q = q.Where(sample5min.TargetLabelIn(p.TargetLabels...))
-	}
-
-	rows, err := q.All(ctx)
-	if err != nil {
-		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
-	}
-
-	return projectAggRows(rows), nil
-}
-
-// Query1hSamples returns 1-hour rollup buckets in the window.
-func (s *Store) Query1hSamples(ctx context.Context, p QueryAggregatedParams) ([]AggregatedRow, error) {
-	q := s.client.Sample1h.Query().
-		Where(sample1h.BucketStartUnixMsGTE(p.FromMs), sample1h.BucketStartUnixMsLTE(p.ToMs)).
-		Order(ent.Asc(sample1h.FieldBucketStartUnixMs))
-	if len(p.TargetLabels) > 0 {
-		q = q.Where(sample1h.TargetLabelIn(p.TargetLabels...))
-	}
-
-	rows, err := q.All(ctx)
-	if err != nil {
-		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
-	}
-
-	return projectAggRows(rows), nil
 }
 
 // projectAggRows collapses Ent's three distinct rollup row types (no shared

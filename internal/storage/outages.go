@@ -5,6 +5,7 @@ import (
 
 	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/db/ent/outage"
+	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
 // Outage matches the outage:start / outage:end event payload so the frontend
@@ -26,12 +27,22 @@ type QueryOutagesParams struct {
 	OnlyOpen bool
 }
 
-// QueryOutages returns outages overlapping [fromMs, toMs] — either started in
-// the window, or started before but still active at fromMs. Catches the
-// in-progress outage that began before the window so the "outage in progress"
-// badge stays accurate.
-func (s *Store) QueryOutages(ctx context.Context, p QueryOutagesParams) ([]Outage, error) {
-	q := s.client.Outage.Query().
+// OutageClient owns reads against the outage table.
+type OutageClient struct {
+	client *ent.Client
+}
+
+// NewOutageClient wraps an Ent client.
+func NewOutageClient(client *ent.Client) *OutageClient {
+	return &OutageClient{client: client}
+}
+
+// Query returns outages overlapping [fromMs, toMs] — either started in the
+// window, or started before but still active at fromMs. Catches the in-progress
+// outage that began before the window so the "outage in progress" badge stays
+// accurate.
+func (c *OutageClient) Query(ctx context.Context, p QueryOutagesParams) ([]Outage, error) {
+	q := c.client.Outage.Query().
 		Order(ent.Desc(outage.FieldStartTsUnixMs))
 
 	q = q.Where(
@@ -60,7 +71,7 @@ func (s *Store) QueryOutages(ctx context.Context, p QueryOutagesParams) ([]Outag
 
 	rows, err := q.All(ctx)
 	if err != nil {
-		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
+		return nil, errors.Wrap(err, "failed to query outages")
 	}
 
 	out := make([]Outage, 0, len(rows))

@@ -13,7 +13,7 @@ import (
 const maxReportWindowMs int64 = 90 * 24 * 60 * 60 * 1000
 
 // RegisterReportHandlers wires report.generate.
-func RegisterReportHandlers(s *Server, store *storage.Store) {
+func RegisterReportHandlers(s *Server, store *storage.Client) {
 	s.Register("report.generate", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p reportGenerateParams
 
@@ -39,7 +39,7 @@ func RegisterReportHandlers(s *Server, store *storage.Store) {
 			return nil, &Error{Code: "invalid_params", Message: "at least one format required"}
 		}
 
-		res, err := reports.Generate(ctx, store.Client(), reports.GenerateParams{
+		res, err := reports.Generate(ctx, store, reports.GenerateParams{
 			OutDir:   p.OutDir,
 			FromMs:   p.FromMs,
 			ToMs:     p.ToMs,

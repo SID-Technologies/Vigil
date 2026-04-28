@@ -73,27 +73,27 @@ func Run() int {
 
 	defer func() { _ = client.Close() }()
 
-	store := storage.NewStore(client)
+	store := storage.NewClient(client)
 
-	err = store.SeedDefaultTargets(ctx)
+	err = store.Seed.DefaultTargets(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to seed default targets")
 		return 1
 	}
 
-	err = store.SeedAppConfig(ctx)
+	err = store.Seed.AppConfig(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to seed app_config")
 		return 1
 	}
 
-	cfg, err := store.GetAppConfig(ctx)
+	cfg, err := store.Config.Get(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load app_config")
 		return 1
 	}
 
-	probeList, err := store.ListEnabledProbes(ctx)
+	probeList, err := store.Targets.ListEnabledProbes(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load enabled probes")
 		return 1
@@ -142,7 +142,7 @@ func Run() int {
 	})
 
 	agg := aggregator.New(client)
-	pruner := retention.New(client)
+	pruner := retention.New(client, store)
 
 	// wg.Wait blocks the deferred client.Close until every worker has stopped.
 	var wg sync.WaitGroup

@@ -25,7 +25,7 @@ type SamplesQueryResponse struct {
 }
 
 // RegisterSampleHandlers wires samples.query. See pickGranularity for auto-resolution rules.
-func RegisterSampleHandlers(s *Server, store *storage.Store) {
+func RegisterSampleHandlers(s *Server, store *storage.Client) {
 	s.Register("samples.query", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p querySamplesParams
 
@@ -58,7 +58,7 @@ func RegisterSampleHandlers(s *Server, store *storage.Store) {
 
 		switch gran {
 		case granularityRaw:
-			rows, err := store.QuerySamples(ctx, storage.QuerySamplesParams{
+			rows, err := store.Samples.Query(ctx, storage.QuerySamplesParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
@@ -71,7 +71,7 @@ func RegisterSampleHandlers(s *Server, store *storage.Store) {
 			return SamplesQueryResponse{Granularity: granularityRaw, Rows: rows}, nil
 
 		case granularity1Min:
-			rows, err := store.Query1minSamples(ctx, storage.QueryAggregatedParams{
+			rows, err := store.Samples.Query1Min(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
@@ -83,7 +83,7 @@ func RegisterSampleHandlers(s *Server, store *storage.Store) {
 			return SamplesQueryResponse{Granularity: granularity1Min, Rows: rows}, nil
 
 		case granularity5min:
-			rows, err := store.Query5minSamples(ctx, storage.QueryAggregatedParams{
+			rows, err := store.Samples.Query5Min(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
@@ -95,7 +95,7 @@ func RegisterSampleHandlers(s *Server, store *storage.Store) {
 			return SamplesQueryResponse{Granularity: granularity5min, Rows: rows}, nil
 
 		case granularity1Hour:
-			rows, err := store.Query1hSamples(ctx, storage.QueryAggregatedParams{
+			rows, err := store.Samples.Query1H(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,

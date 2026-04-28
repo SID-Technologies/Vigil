@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/internal/storage"
 	"github.com/sid-technologies/vigil/pkg/errors"
 )
@@ -43,7 +42,7 @@ type Result struct {
 // Generate writes the requested formats and returns the paths actually
 // written. On partial failure, already-written paths are kept and an error
 // is returned so the caller can surface both.
-func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result, error) {
+func Generate(ctx context.Context, store *storage.Client, p GenerateParams) (Result, error) {
 	if p.OutDir == "" {
 		return Result{}, errors.New("out_dir is required")
 	}
@@ -66,10 +65,8 @@ func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result
 		base = "vigil-report-" + time.Now().Format("2006-01-02T15-04")
 	}
 
-	store := storage.NewStore(client)
-
 	// Reports pull raw samples; the IPC handler validates window size first.
-	samples, err := store.QuerySamples(ctx, storage.QuerySamplesParams{
+	samples, err := store.Samples.Query(ctx, storage.QuerySamplesParams{
 		FromMs:       p.FromMs,
 		ToMs:         p.ToMs,
 		TargetLabels: p.Targets,
@@ -79,12 +76,12 @@ func Generate(ctx context.Context, client *ent.Client, p GenerateParams) (Result
 		return Result{}, errors.Wrap(err, "load samples")
 	}
 
-	wifi, err := store.QueryWifiSamples(ctx, p.FromMs, p.ToMs)
+	wifi, err := store.Wifi.Query(ctx, p.FromMs, p.ToMs)
 	if err != nil {
 		return Result{}, errors.Wrap(err, "load wifi samples")
 	}
 
-	outages, err := store.QueryOutages(ctx, storage.QueryOutagesParams{
+	outages, err := store.Outages.Query(ctx, storage.QueryOutagesParams{
 		FromMs: p.FromMs,
 		ToMs:   p.ToMs,
 	})

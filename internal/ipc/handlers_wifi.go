@@ -9,7 +9,7 @@ import (
 )
 
 // RegisterWifiHandlers wires wifi.list.
-func RegisterWifiHandlers(s *Server, store *storage.Store) {
+func RegisterWifiHandlers(s *Server, store *storage.Client) {
 	s.Register("wifi.list", func(ctx context.Context, params json.RawMessage) (any, *Error) {
 		var p wifiListParams
 
@@ -27,7 +27,7 @@ func RegisterWifiHandlers(s *Server, store *storage.Store) {
 			p.FromMs = p.ToMs - 60*60*1000
 		}
 
-		out, err := store.QueryWifiSamples(ctx, p.FromMs, p.ToMs)
+		out, err := store.Wifi.Query(ctx, p.FromMs, p.ToMs)
 		if err != nil {
 			return nil, &Error{Code: "internal", Message: err.Error()}
 		}
