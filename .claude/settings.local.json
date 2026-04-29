@@ -163,7 +163,19 @@
       "Bash(tee /tmp/test.out)",
       "Bash(echo \"stashed exit=$?\")",
       "Bash(echo \"BUILD exit=$?\")",
-      "Bash(echo \"linux=$?\")"
+      "Bash(echo \"linux=$?\")",
+      "Bash(set -e)",
+      "Bash(awk '/## Screenshots/,/^## /' README.md)",
+      "Bash(gh repo *)",
+      "Bash(sips -g pixelWidth -g pixelHeight apps/desktop/src-tauri/icons/icon.png)",
+      "Bash(cargo check *)",
+      "Bash(echo \"cargo=$?\")",
+      "Bash(pngquant --quality=80-95 --skip-if-larger --strip --ext .png --force assets/screenshots/*.png)",
+      "Bash(go mod *)",
+      "Bash(go tool *)",
+      "Read(//Users/danflanagan/Documents/GitHub/Pugio/apps/**)",
+      "Read(//Users/danflanagan/Documents/GitHub/Pugio/**)",
+      "Bash(pnpm install *)"
     ]
   }
 }

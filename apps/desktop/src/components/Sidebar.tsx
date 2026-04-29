@@ -29,7 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/settings', icon: Gear, label: 'Settings' },
 ];
 
-const THEME_STYLES = ['nightwatch', 'default', 'torch', 'odyssey'] as const;
+const THEME_STYLES = ['nightwatch', 'default', 'torch', 'statio'] as const;
 
 export function Sidebar() {
   const location = useLocation();

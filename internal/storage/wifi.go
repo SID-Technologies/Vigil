@@ -5,6 +5,7 @@ import (
 
 	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/db/ent/wifisample"
+	"github.com/sid-technologies/vigil/pkg/errors"
 )
 
 // WifiSample is the IPC-shape view of one Wi-Fi observation.
@@ -19,10 +20,20 @@ type WifiSample struct {
 	Channel       *string  `json:"channel,omitempty"`
 }
 
-// QueryWifiSamples returns Wi-Fi samples in [fromMs, toMs] ordered by time.
-// One sample/minute means a 7-day window is ~10K rows — no pagination needed.
-func (s *Store) QueryWifiSamples(ctx context.Context, fromMs, toMs int64) ([]WifiSample, error) {
-	rows, err := s.client.WifiSample.Query().
+// WifiClient owns reads against the wifi_sample table.
+type WifiClient struct {
+	client *ent.Client
+}
+
+// NewWifiClient wraps an Ent client.
+func NewWifiClient(client *ent.Client) *WifiClient {
+	return &WifiClient{client: client}
+}
+
+// Query returns Wi-Fi samples in [fromMs, toMs] ordered by time. One sample
+// per minute means a 7-day window is ~10K rows — no pagination needed.
+func (c *WifiClient) Query(ctx context.Context, fromMs, toMs int64) ([]WifiSample, error) {
+	rows, err := c.client.WifiSample.Query().
 		Where(
 			wifisample.TsUnixMsGTE(fromMs),
 			wifisample.TsUnixMsLTE(toMs),
@@ -30,7 +41,7 @@ func (s *Store) QueryWifiSamples(ctx context.Context, fromMs, toMs int64) ([]Wif
 		Order(ent.Asc(wifisample.FieldTsUnixMs)).
 		All(ctx)
 	if err != nil {
-		return nil, err //nolint:wrapcheck // wrapped at IPC boundary
+		return nil, errors.Wrap(err, "failed to query wifi samples")
 	}
 
 	out := make([]WifiSample, 0, len(rows))

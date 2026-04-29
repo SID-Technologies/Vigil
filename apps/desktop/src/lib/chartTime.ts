@@ -24,6 +24,19 @@ export const BUCKET_INTERVAL_MS = {
   '1h': 60 * 60 * 1000,
 } as const;
 
+// CycleBucketMs groups concurrent probes from the same cycle. The 13 probes
+// in one cycle finish within ~10–50ms of each other; bucketing at 100ms
+// reliably merges them into one X position. Coarser bucketing (e.g. 1s) is
+// wrong because cycle intervals like 2.5s snap unevenly, producing visible
+// 2s/3s sawtooth gaps along the X axis.
+export const CycleBucketMs = 100;
+
+// CycleBucket rounds a probe timestamp to the nearest cycle bucket so the
+// 13 concurrent probes in one cycle land on the same X position.
+export function CycleBucket(ts: number): number {
+  return Math.round(ts / CycleBucketMs) * CycleBucketMs;
+}
+
 export type BucketGranularity = keyof typeof BUCKET_INTERVAL_MS;
 
 interface TimePoint {

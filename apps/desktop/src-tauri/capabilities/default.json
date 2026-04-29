@@ -32,6 +32,8 @@
       ]
     },
     "updater:default",
+    "process:default",
+    "process:allow-restart",
     "dialog:default",
     "autostart:default",
     "autostart:allow-enable",

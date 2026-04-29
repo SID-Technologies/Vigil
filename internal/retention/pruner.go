@@ -22,13 +22,15 @@ import (
 // Pruner deletes old rows on Interval. Tests can shorten Interval; production stays at 1h.
 type Pruner struct {
 	client   *ent.Client
+	store    *storage.Client
 	Interval time.Duration
 }
 
 // New returns a Pruner with a 1h interval.
-func New(client *ent.Client) *Pruner {
+func New(client *ent.Client, store *storage.Client) *Pruner {
 	return &Pruner{
 		client:   client,
+		store:    store,
 		Interval: 1 * time.Hour,
 	}
 }
@@ -39,7 +41,7 @@ func (p *Pruner) Run(ctx context.Context) {
 }
 
 func (p *Pruner) runOnce(ctx context.Context) {
-	cfg, err := storage.NewStore(p.client).GetAppConfig(ctx)
+	cfg, err := p.store.Config.Get(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("retention: app_config read failed")
 		return

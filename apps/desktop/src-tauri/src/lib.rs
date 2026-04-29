@@ -494,6 +494,13 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
         ],
     )?;
 
+    // macOS menu-bar template image. Flat black silhouette with alpha;
+    // macOS inverts to white in dark menu bars and tints to accent color
+    // when the menu is open. icon_as_template(true) flips ".icon()" into
+    // "treat as monochrome, tint per system theme." On Windows / Linux
+    // the same PNG is used directly (no auto-tint there).
+    let tray_icon = tauri::include_image!("./icons/tray-template.png");
+
     TrayIconBuilder::new()
         .menu(&menu)
         // On macOS the click event is consumed by menu display by default,
@@ -501,12 +508,8 @@ fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> 
         // default to false (left-click does literally nothing if you also
         // attach an on_tray_icon_event handler). Set explicitly.
         .show_menu_on_left_click(true)
-        .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
-            // Fallback: synthesize a 1x1 from nothing — should never hit
-            // since tauri.conf.json defines bundle icons. If it does, log.
-            eprintln!("[vigil] no default window icon for tray — icon may not render");
-            tauri::image::Image::new_owned(vec![0; 4], 1, 1)
-        }))
+        .icon(tray_icon)
+        .icon_as_template(true)
         .tooltip("Vigil — Network Watch")
         .on_menu_event(|app, event| {
             match event.id.as_ref() {
@@ -572,6 +575,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
             // AppleScript launcher on macOS — most reliable across Sonoma+.

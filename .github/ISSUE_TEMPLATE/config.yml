@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vigil README
+    url: https://github.com/sid-technologies/vigil#readme
+    about: Install instructions, screenshots, and the answers to most common questions live here.
+  - name: Discussions
+    url: https://github.com/sid-technologies/vigil/discussions
+    about: Questions, ideas, and "is this a bug?"-type uncertainty belong in Discussions, not Issues.

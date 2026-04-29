@@ -2,7 +2,6 @@ package ipc
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/sid-technologies/vigil/internal/storage"
@@ -25,14 +24,9 @@ type SamplesQueryResponse struct {
 }
 
 // RegisterSampleHandlers wires samples.query. See pickGranularity for auto-resolution rules.
-func RegisterSampleHandlers(s *Server, store *storage.Store) {
-	s.Register("samples.query", func(ctx context.Context, params json.RawMessage) (any, *Error) {
-		var p querySamplesParams
-
-		err := json.Unmarshal(params, &p)
-		if err != nil {
-			return nil, &Error{Code: "invalid_params", Message: err.Error()}
-		}
+func RegisterSampleHandlers(s *Server, store *storage.Client) {
+	s.Register("samples.query", bind(func(ctx context.Context, p querySamplesParams) (SamplesQueryResponse, *Error) {
+		var zero SamplesQueryResponse
 
 		now := time.Now().UnixMilli()
 		if p.ToMs == 0 {
@@ -58,58 +52,58 @@ func RegisterSampleHandlers(s *Server, store *storage.Store) {
 
 		switch gran {
 		case granularityRaw:
-			rows, err := store.QuerySamples(ctx, storage.QuerySamplesParams{
+			rows, err := store.Samples.Query(ctx, storage.QuerySamplesParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
 				Limit:        p.Limit,
 			})
 			if err != nil {
-				return nil, &Error{Code: "internal", Message: err.Error()}
+				return zero, internalErr(err)
 			}
 
 			return SamplesQueryResponse{Granularity: granularityRaw, Rows: rows}, nil
 
 		case granularity1Min:
-			rows, err := store.Query1minSamples(ctx, storage.QueryAggregatedParams{
+			rows, err := store.Samples.Query1Min(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
 			})
 			if err != nil {
-				return nil, &Error{Code: "internal", Message: err.Error()}
+				return zero, internalErr(err)
 			}
 
 			return SamplesQueryResponse{Granularity: granularity1Min, Rows: rows}, nil
 
 		case granularity5min:
-			rows, err := store.Query5minSamples(ctx, storage.QueryAggregatedParams{
+			rows, err := store.Samples.Query5Min(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
 			})
 			if err != nil {
-				return nil, &Error{Code: "internal", Message: err.Error()}
+				return zero, internalErr(err)
 			}
 
 			return SamplesQueryResponse{Granularity: granularity5min, Rows: rows}, nil
 
 		case granularity1Hour:
-			rows, err := store.Query1hSamples(ctx, storage.QueryAggregatedParams{
+			rows, err := store.Samples.Query1H(ctx, storage.QueryAggregatedParams{
 				FromMs:       p.FromMs,
 				ToMs:         p.ToMs,
 				TargetLabels: p.TargetLabels,
 			})
 			if err != nil {
-				return nil, &Error{Code: "internal", Message: err.Error()}
+				return zero, internalErr(err)
 			}
 
 			return SamplesQueryResponse{Granularity: granularity1Hour, Rows: rows}, nil
 
 		default:
-			return nil, &Error{Code: "invalid_params", Message: "unknown granularity: " + gran}
+			return zero, &Error{Code: "invalid_params", Message: "unknown granularity: " + gran}
 		}
-	})
+	}))
 }
 
 // pickGranularity targets ~60-600 points per series so recharts stays smooth.

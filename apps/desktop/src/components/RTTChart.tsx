@@ -21,7 +21,7 @@ import { useColorPalette } from '../hooks/useColorPalette';
 import { useLiveProbes } from '../hooks/useLiveSamples';
 import { useAllProbeTargets } from '../hooks/useAllProbeTargets';
 import type { ProbeResult } from '../hooks/useProbeCycle';
-import { fillRawGaps, generateTimeTicks } from '../lib/chartTime';
+import { CycleBucket, fillRawGaps, generateTimeTicks } from '../lib/chartTime';
 
 interface RTTChartProps {
   selectedLabels: string[];
@@ -70,7 +70,7 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
       title="RTT — last hour"
       trailing={
         <XStack gap="$2" alignItems="center">
-          <PulsingDot color="var(--accentColor)" size={8} pulseKey={tick} />
+          <PulsingDot color="#e0a458" size={10} pulseKey={tick} />
           <Text fontSize={11} color="$color8">live</Text>
         </XStack>
       }
@@ -283,14 +283,13 @@ function projectBuffer(
   return out;
 }
 
-// Group probes by their (already-very-near) timestamp and take the median
-// RTT across reachable targets per cycle. Each cycle's probes span tens of
-// ms, so round to the nearest second to group them cleanly.
+// rollupMedianRaw groups successful probes by cycle and emits one median
+// point per cycle.
 function rollupMedianRaw(rows: ProbeResult[]): MedianPoint[] {
   const byCycle = new Map<number, number[]>();
   for (const r of rows) {
     if (!r.success || r.rtt_ms == null) continue;
-    const t = Math.round(r.ts_unix_ms / 1000) * 1000;
+    const t = CycleBucket(r.ts_unix_ms);
     const arr = byCycle.get(t) ?? [];
     arr.push(r.rtt_ms);
     byCycle.set(t, arr);
@@ -300,14 +299,18 @@ function rollupMedianRaw(rows: ProbeResult[]): MedianPoint[] {
     .map((t) => ({ ts: t, medianP50: median(byCycle.get(t)!) }));
 }
 
+// pivotRaw emits one row per cycle with each selected target's RTT as a
+// separate field. CycleBucket aligns the 13 concurrent probes onto one X
+// position so multi-target lines stay continuous.
 function pivotRaw(rows: ProbeResult[], selectedLabels: string[]): PivotPoint[] {
   const allowed = new Set(selectedLabels);
   const byTs = new Map<number, PivotPoint>();
   for (const r of rows) {
     if (!allowed.has(r.target.label) || !r.success || r.rtt_ms == null) continue;
-    const existing = byTs.get(r.ts_unix_ms) ?? { ts: r.ts_unix_ms };
+    const t = CycleBucket(r.ts_unix_ms);
+    const existing = byTs.get(t) ?? { ts: t };
     existing[r.target.label] = r.rtt_ms;
-    byTs.set(r.ts_unix_ms, existing);
+    byTs.set(t, existing);
   }
   return Array.from(byTs.values()).sort((a, b) => a.ts - b.ts);
 }

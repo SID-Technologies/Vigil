@@ -2,7 +2,6 @@ package ipc
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
 	"github.com/sid-technologies/vigil/internal/reports"
@@ -13,33 +12,28 @@ import (
 const maxReportWindowMs int64 = 90 * 24 * 60 * 60 * 1000
 
 // RegisterReportHandlers wires report.generate.
-func RegisterReportHandlers(s *Server, store *storage.Store) {
-	s.Register("report.generate", func(ctx context.Context, params json.RawMessage) (any, *Error) {
-		var p reportGenerateParams
-
-		err := json.Unmarshal(params, &p)
-		if err != nil {
-			return nil, &Error{Code: "invalid_params", Message: err.Error()}
-		}
+func RegisterReportHandlers(s *Server, store *storage.Client) {
+	s.Register("report.generate", bind(func(ctx context.Context, p reportGenerateParams) (reports.Result, *Error) {
+		var zero reports.Result
 
 		if p.OutDir == "" {
-			return nil, &Error{Code: "invalid_params", Message: "out_dir required"}
+			return zero, &Error{Code: "invalid_params", Message: "out_dir required"}
 		}
 
 		if p.FromMs == 0 || p.ToMs == 0 || p.ToMs <= p.FromMs {
-			return nil, &Error{Code: "invalid_params", Message: "valid from_ms < to_ms required"}
+			return zero, &Error{Code: "invalid_params", Message: "valid from_ms < to_ms required"}
 		}
 
 		if p.ToMs-p.FromMs > maxReportWindowMs {
-			return nil, &Error{Code: "window_too_large", Message: "max 90 days"}
+			return zero, &Error{Code: "window_too_large", Message: "max 90 days"}
 		}
 
 		formats := parseFormats(p.Formats)
 		if formats == 0 {
-			return nil, &Error{Code: "invalid_params", Message: "at least one format required"}
+			return zero, &Error{Code: "invalid_params", Message: "at least one format required"}
 		}
 
-		res, err := reports.Generate(ctx, store.Client(), reports.GenerateParams{
+		res, err := reports.Generate(ctx, store, reports.GenerateParams{
 			OutDir:   p.OutDir,
 			FromMs:   p.FromMs,
 			ToMs:     p.ToMs,
@@ -48,11 +42,11 @@ func RegisterReportHandlers(s *Server, store *storage.Store) {
 			BaseName: p.BaseName,
 		})
 		if err != nil {
-			return nil, &Error{Code: "internal", Message: err.Error()}
+			return zero, internalErr(err)
 		}
 
 		return res, nil
-	})
+	}))
 }
 
 func parseFormats(in []string) reports.Format {

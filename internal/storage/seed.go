@@ -1,26 +1,37 @@
-// Package storage is the persistence layer above Ent.
 package storage
 
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/sid-technologies/vigil/db/ent"
 	"github.com/sid-technologies/vigil/db/ent/target"
 	"github.com/sid-technologies/vigil/internal/constants"
 	"github.com/sid-technologies/vigil/internal/probes"
+	"github.com/sid-technologies/vigil/pkg/errors"
+
+	"github.com/google/uuid"
 )
 
+// SeedClient owns first-run seeding of builtin targets and the singleton
+// app_config row.
+type SeedClient struct {
+	client *ent.Client
+}
 
-// SeedDefaultTargets inserts the builtin probe targets only when the table is
+// NewSeedClient wraps an Ent client.
+func NewSeedClient(client *ent.Client) *SeedClient {
+	return &SeedClient{client: client}
+}
+
+// DefaultTargets inserts the builtin probe targets only when the table is
 // empty — a user who has deleted every default should not see them resurrected
 // on the next boot.
-func (s *Store) SeedDefaultTargets(ctx context.Context) error {
-	count, err := s.client.Target.Query().Count(ctx)
+func (c *SeedClient) DefaultTargets(ctx context.Context) error {
+	count, err := c.client.Target.Query().Count(ctx)
 	if err != nil {
-		return err //nolint:wrapcheck // wrapped at IPC boundary
+		return errors.Wrap(err, "failed to count targets")
 	}
 
 	if count > 0 {
@@ -31,7 +42,7 @@ func (s *Store) SeedDefaultTargets(ctx context.Context) error {
 
 	bulk := make([]*ent.TargetCreate, 0, len(defaults))
 	for _, t := range defaults {
-		c := s.client.Target.Create().
+		create := c.client.Target.Create().
 			SetID(uuid.NewString()).
 			SetLabel(t.Label).
 			SetKind(target.Kind(string(t.Kind))).
@@ -39,15 +50,15 @@ func (s *Store) SeedDefaultTargets(ctx context.Context) error {
 			SetEnabled(true).
 			SetIsBuiltin(true)
 		if t.Port != nil {
-			c.SetPort(*t.Port)
+			create.SetPort(*t.Port)
 		}
 
-		bulk = append(bulk, c)
+		bulk = append(bulk, create)
 	}
 
-	_, err = s.client.Target.CreateBulk(bulk...).Save(ctx)
+	_, err = c.client.Target.CreateBulk(bulk...).Save(ctx)
 	if err != nil {
-		return err //nolint:wrapcheck // wrapped at IPC boundary
+		return errors.Wrap(err, "failed to seed default targets")
 	}
 
 	log.Info().Int("count", len(bulk)).Msg("storage: seeded default targets")
@@ -55,18 +66,18 @@ func (s *Store) SeedDefaultTargets(ctx context.Context) error {
 	return nil
 }
 
-// SeedAppConfig inserts the singleton app_config row on first run.
-func (s *Store) SeedAppConfig(ctx context.Context) error {
-	exists, err := s.client.AppConfig.Query().Where().Exist(ctx)
+// AppConfig inserts the singleton app_config row on first run.
+func (c *SeedClient) AppConfig(ctx context.Context) error {
+	exists, err := c.client.AppConfig.Query().Where().Exist(ctx)
 	if err != nil {
-		return err //nolint:wrapcheck // wrapped at IPC boundary
+		return errors.Wrap(err, "failed to check app config existence")
 	}
 
 	if exists {
 		return nil
 	}
 
-	_, err = s.client.AppConfig.Create().
+	_, err = c.client.AppConfig.Create().
 		SetID(AppConfigSingletonID).
 		SetPingIntervalSec(constants.DefaultPingIntervalSec).
 		SetFlushIntervalSec(constants.DefaultFlushIntervalSec).
@@ -77,7 +88,7 @@ func (s *Store) SeedAppConfig(ctx context.Context) error {
 		SetWifiSampleEnabled(true).
 		Save(ctx)
 	if err != nil {
-		return err //nolint:wrapcheck // wrapped at IPC boundary
+		return errors.Wrap(err, "failed to seed app config")
 	}
 
 	log.Info().Msg("storage: seeded app_config defaults")

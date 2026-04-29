@@ -42,10 +42,14 @@ export function TargetMultiSelect({
   const labelsByKind = (kinds: string[]) =>
     allTargets.filter((t) => kinds.includes(t.kind)).map((t) => t.label);
 
-  const status =
-    selected.length === 0
-      ? emptyMessage ?? 'None selected'
-      : `${selected.length} of ${allTargets.length} selected`;
+  // Empty selection means "show everything" downstream — match that
+  // visually by rendering each chip as active. Clicking a chip in this
+  // mode focuses it (selects only that target) rather than toggling,
+  // because toggling-off-from-all is semantically confusing.
+  const allMode = selected.length === 0;
+  const status = allMode
+    ? emptyMessage ?? `All ${allTargets.length} targets — click any to focus`
+    : `${selected.length} of ${allTargets.length} selected`;
 
   return (
     <YStack gap="$2">
@@ -62,7 +66,7 @@ export function TargetMultiSelect({
 
       <XStack flexWrap="wrap" gap="$1.5" alignItems="center">
         {allTargets.map((t) => {
-          const active = selected.includes(t.label);
+          const active = allMode || selected.includes(t.label);
           const color = getColor(t.label);
           return (
             <XStack
@@ -78,7 +82,7 @@ export function TargetMultiSelect({
               cursor="pointer"
               hoverStyle={{ backgroundColor: '$color3', borderColor: active ? (color as any) : '$color8' }}
               pressStyle={{ opacity: 0.85 }}
-              onPress={() => onToggle(t.label)}
+              onPress={() => (allMode ? onSetAll([t.label]) : onToggle(t.label))}
               animation="quick"
             >
               <XStack
