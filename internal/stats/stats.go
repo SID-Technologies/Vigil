@@ -2,6 +2,7 @@
 package stats
 
 import (
+	"math"
 	"sort"
 
 	"github.com/sid-technologies/vigil/internal/constants"
@@ -266,10 +267,7 @@ func AggregateFromBuckets(children []BucketSummary) BucketSummary {
 // Round2 rounds v to two decimal places. Single definition prevents drift
 // between probe recording and report generation.
 func Round2(v float64) float64 {
-	const (
-		hundredths = 100.0
-		halfStep   = 0.5
-	)
+	const hundredths = 100.0
 
-	return float64(int64(v*hundredths+halfStep)) / hundredths
+	return math.Round(v*hundredths) / hundredths
 }

@@ -8,11 +8,23 @@ Lives in the system tray. Works on macOS, Windows, and Linux.
 
 ## Screenshots
 
-> _Coming soon — drop captures into `assets/screenshots/` and link them here._
+### Dashboard — is the network ok right now?
 
-- `assets/screenshots/dashboard.png` — live RTT chart + per-target tiles
-- `assets/screenshots/outages.png` — full outage timeline with timestamps and durations
-- `assets/screenshots/history.png` — time-range explorer with uptime % and percentiles
+Live RTT chart over the last 15 minutes, per-target status tiles, and a status banner that turns red the moment three consecutive failures land.
+
+![Vigil dashboard — live RTT and per-target tiles](assets/screenshots/dashboard.png)
+
+### Outages — the receipts
+
+Every detected outage with exact start/end timestamps, duration, consecutive-failure count, and error-code breakdown. This is the page you screenshot when your ISP says "everything's fine."
+
+![Vigil outages timeline with timestamps and error breakdown](assets/screenshots/outages.png)
+
+### History — time-range explorer
+
+Pick any window from 1 hour to 30 days. RTT trend, uptime %, p50/p95/p99 latency, and per-target stats. Generate CSV / JSON / HTML reports from any view.
+
+![Vigil history view with RTT trend and per-target stats](assets/screenshots/history.png)
 
 ## Install
 

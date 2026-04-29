@@ -7,7 +7,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackpal/gateway v1.0.16
 	github.com/mdlayher/wifi v0.4.0
-	github.com/pkg/errors v0.9.1
 	github.com/prometheus-community/pro-bing v0.7.0
 	github.com/rs/zerolog v1.34.0
 	golang.org/x/sync v0.19.0

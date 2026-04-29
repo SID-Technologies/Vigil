@@ -2,7 +2,6 @@ package ipc
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/sid-technologies/vigil/internal/storage"
@@ -10,14 +9,7 @@ import (
 
 // RegisterWifiHandlers wires wifi.list.
 func RegisterWifiHandlers(s *Server, store *storage.Client) {
-	s.Register("wifi.list", func(ctx context.Context, params json.RawMessage) (any, *Error) {
-		var p wifiListParams
-
-		err := json.Unmarshal(params, &p)
-		if err != nil {
-			return nil, &Error{Code: "invalid_params", Message: err.Error()}
-		}
-
+	s.Register("wifi.list", bind(func(ctx context.Context, p wifiListParams) ([]storage.WifiSample, *Error) {
 		now := time.Now().UnixMilli()
 		if p.ToMs == 0 {
 			p.ToMs = now
@@ -29,11 +21,11 @@ func RegisterWifiHandlers(s *Server, store *storage.Client) {
 
 		out, err := store.Wifi.Query(ctx, p.FromMs, p.ToMs)
 		if err != nil {
-			return nil, &Error{Code: "internal", Message: err.Error()}
+			return nil, internalErr(err)
 		}
 
 		return out, nil
-	})
+	}))
 }
 
 type wifiListParams struct {

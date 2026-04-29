@@ -80,7 +80,7 @@ function computeTone(
   if (openOutages.length > 0) return { cssColor: '#f85149' };
   if (!latest) return { cssColor: '#8b949e' };
   const pct = latest.total > 0 ? latest.ok / latest.total : 0;
-  if (pct >= 1) return { cssColor: 'var(--accentColor)' };
+  if (pct >= 1) return { cssColor: '#e0a458' }; // watchfire amber
   if (pct >= 0.8) return { cssColor: '#d29922' };
   return { cssColor: '#f85149' };
 }

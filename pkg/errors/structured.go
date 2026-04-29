@@ -1,29 +1,12 @@
 package errors
 
 import (
-	pkgerrors "github.com/pkg/errors"
+	stderrors "errors"
 )
 
 type structured struct {
 	err   error
 	attrs []any
-}
-
-// StackTrace implements pkgerrors.StackTracer.
-func (s structured) StackTrace() pkgerrors.StackTrace {
-	type stackTracer interface {
-		StackTrace() pkgerrors.StackTrace
-	}
-
-	tracer, ok := s.err.(stackTracer)
-	if !ok {
-		return nil
-	}
-
-	trace := tracer.StackTrace()
-
-	// Trim this package's frame and the runtime frame from the trace.
-	return trace[1 : len(trace)-1]
 }
 
 func (s structured) Error() string {
@@ -41,9 +24,9 @@ func (s structured) Unwrap() error {
 
 func (s structured) Is(err error) bool {
 	var other structured
-	if !pkgerrors.As(err, &other) {
+	if !stderrors.As(err, &other) {
 		return false
 	}
 
-	return pkgerrors.Is(s.err, other.err)
+	return stderrors.Is(s.err, other.err)
 }

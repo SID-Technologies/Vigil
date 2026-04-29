@@ -4,16 +4,13 @@ package errors
 
 import (
 	"fmt"
-
-	pkgerrors "github.com/pkg/errors"
 )
 
 // New returns an error formatted via fmt.Sprintf with the attached attrs.
 func New(msg string, attrs ...any) error {
-	formatted := fmt.Sprintf(msg, attrs...)
-
 	return structured{
-		err:   pkgerrors.New(formatted),
+		//nolint:forbidigo // pkg/errors itself is the implementation that other code must use
+		err:   fmt.Errorf(msg, attrs...),
 		attrs: attrs,
 	}
 }
@@ -36,7 +33,8 @@ func Wrap(err error, msg string, attrs ...any) error {
 	}
 
 	return structured{
-		err:   pkgerrors.Wrap(err, msg),
+		//nolint:forbidigo // pkg/errors itself is the implementation that other code must use
+		err:   fmt.Errorf("%s: %w", msg, err),
 		attrs: attrs,
 	}
 }

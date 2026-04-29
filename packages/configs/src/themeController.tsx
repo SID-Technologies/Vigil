@@ -5,7 +5,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 
 // Theme style options. Vigil ships `nightwatch` as the default; the others are
 // inherited from the Pugio config so users can switch.
-export type ThemeStyle = 'nightwatch' | 'default' | 'torch' | 'odyssey';
+export type ThemeStyle = 'nightwatch' | 'default' | 'torch' | 'statio';
 
 // Accent color options (for default theme only)
 export type AccentColor = 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'teal';
@@ -16,7 +16,7 @@ export type TamaguiThemeName =
   | 'light_blue' | 'dark_blue'
   | 'light_green' | 'dark_green'
   | 'light_torch' | 'dark_torch'
-  | 'light_odyssey' | 'dark_odyssey'
+  | 'light_statio' | 'dark_statio'
   | 'light_nightwatch' | 'dark_nightwatch';
 
 interface ThemeContextType {
@@ -73,7 +73,7 @@ const resolveThemeName = (
 const LS_THEME_MODE = 'vigil-theme-mode';
 const LS_THEME_STYLE = 'vigil-theme-style';
 
-const VALID_STYLES: ThemeStyle[] = ['nightwatch', 'default', 'torch', 'odyssey'];
+const VALID_STYLES: ThemeStyle[] = ['nightwatch', 'default', 'torch', 'statio'];
 
 export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
@@ -121,7 +121,7 @@ export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
       nightwatch: { light: '#b8742a', dark: '#e0a458' },
       default: { light: '#0090ff', dark: '#0090ff' },
       torch: { light: '#8b5cf6', dark: '#8b5cf6' },
-      odyssey: { light: '#b08d3e', dark: '#c8a84e' },
+      statio: { light: '#b08d3e', dark: '#c8a84e' },
     };
     const colors = accentMap[themeStyle] || accentMap.nightwatch;
     const root = document.documentElement;

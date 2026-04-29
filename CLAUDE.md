@@ -60,7 +60,7 @@ bridge.
 Custom theme defined in `packages/configs/src/themes.ts`. Watchman's
 tower at 2am: cold dark slate `#0b1116`, one warm watchfire amber
 `#e0a458` burning. Vigil defaults to `nightwatch` style + dark mode. The
-other styles (default / torch / odyssey) ship as alternatives in the
+other styles (default / torch / statio) ship as alternatives in the
 sidebar's theme picker.
 
 ## Aggregation tiers

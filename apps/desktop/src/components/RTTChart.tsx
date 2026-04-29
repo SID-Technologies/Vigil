@@ -70,7 +70,7 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
       title="RTT — last hour"
       trailing={
         <XStack gap="$2" alignItems="center">
-          <PulsingDot color="var(--accentColor)" size={8} pulseKey={tick} />
+          <PulsingDot color="#e0a458" size={10} pulseKey={tick} />
           <Text fontSize={11} color="$color8">live</Text>
         </XStack>
       }

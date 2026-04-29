@@ -289,7 +289,7 @@ const torchSemanticColorsDark = {
 // ODYSSEY THEME — flat theme objects merged onto base via spread
 // =============================================================================
 
-const odysseyDark = {
+const statioDark = {
   background: '#080c12',
   backgroundHover: '#0c1018',
   backgroundPress: '#0a0e14',
@@ -323,7 +323,7 @@ const odysseyDark = {
 // NIGHT WATCH THEME — Vigil's signature theme
 // =============================================================================
 // Watchman's tower at 2am: cold dark slate, one warm amber light burning.
-// Distinguishable from the Odyssey (Aegean gold) and Default (electric blue) at a glance.
+// Distinguishable from the Statio (Aegean gold) and Default (electric blue) at a glance.
 
 const nightWatchDark = {
   // Surfaces — deep slate, slight cool undertone
@@ -507,17 +507,17 @@ const generatedThemes = createThemes({
   },
 })
 
-// Spread base + theme overrides for Odyssey and Night Watch (matches the
+// Spread base + theme overrides for Statio and Night Watch (matches the
 // Pugio-Website pattern). createThemes' extra-token propagation is unreliable
 // across child themes, so we merge flat overrides ourselves.
 const allThemes = {
   ...generatedThemes,
 
-  dark_odyssey: {
+  dark_statio: {
     ...generatedThemes.dark,
-    ...odysseyDark,
+    ...statioDark,
   },
-  light_odyssey: {
+  light_statio: {
     ...generatedThemes.light,
     background: '#f4f2ec',
     backgroundHover: '#eae6dc',
