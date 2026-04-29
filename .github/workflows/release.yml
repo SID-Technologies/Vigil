@@ -1,7 +1,13 @@
 name: Release
 
-# Triggered by pushing a `v*` tag (e.g. `v0.1.0`). Creates a draft GitHub
-# Release populated with the bundles produced on each platform runner.
+# Pattern ported from Pugio/Statio's `publish_desktop_release.yml`,
+# which has been validated end-to-end. Two macOS jobs (separate aarch64 +
+# x86_64 bundles), Linux x64, Windows x64. The Vigil-specific addition is
+# the Go sidecar build step on each platform — Pugio is pure JS/Rust.
+#
+# Trigger: workflow_dispatch with a bump choice. Auto-derives the next
+# version from the latest `v*` tag, edits tauri.conf.json + Cargo.toml,
+# commits, tags, builds, and finally flips the draft release to published.
 #
 # Required GitHub Secrets:
 #
@@ -18,15 +24,109 @@ name: Release
 #   WINDOWS_CERTIFICATE                    # base64 .pfx (or use Azure Trusted Signing)
 #   WINDOWS_CERTIFICATE_PASSWORD           # .pfx password
 #
-# See CLAUDE.md for the runbook to provision these.
+# Apple/Windows secrets are optional — if unset, builds produce unsigned
+# bundles. See CLAUDE.md for the runbook to provision them.
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
 
 jobs:
+  # 1. Derive the next version from the latest tag.
+  version:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: next
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST=$(gh release list --limit 50 --json tagName --jq '.[].tagName' | grep '^v[0-9]' | head -1 || echo "")
+
+          if [ -z "$LATEST" ]; then
+            CURRENT="0.0.0"
+          else
+            CURRENT="${LATEST#v}"
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          case "${{ inputs.bump }}" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          TAG="v${VERSION}"
+
+          echo "Releasing ${TAG} (was ${CURRENT})"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  # 2. Bump tauri.conf.json + Cargo.toml, clean stale tag/release, then tag.
+  tag:
+    needs: version
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update version in tauri.conf.json
+        run: |
+          cd apps/desktop/src-tauri
+          jq '.version = "${{ needs.version.outputs.version }}"' tauri.conf.json > tmp.json && mv tmp.json tauri.conf.json
+
+      - name: Update version in Cargo.toml
+        run: |
+          cd apps/desktop/src-tauri
+          sed -i 's/^version = ".*"/version = "${{ needs.version.outputs.version }}"/' Cargo.toml
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml
+          git commit -m "chore: bump desktop version to ${{ needs.version.outputs.version }}" || echo "No changes to commit"
+          git push
+
+      - name: Clean up stale tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Survive failed prior runs — delete remote tag, local tag, and any draft release.
+          git push origin --delete ${{ needs.version.outputs.tag }} 2>/dev/null || true
+          git tag -d ${{ needs.version.outputs.tag }} 2>/dev/null || true
+          gh release delete ${{ needs.version.outputs.tag }} --yes 2>/dev/null || true
+
+      - name: Create tag
+        run: |
+          git tag ${{ needs.version.outputs.tag }}
+          git push origin ${{ needs.version.outputs.tag }}
+
+  # 3. Build for all platforms in parallel. Each runner builds the Go sidecar
+  # for its target triple, then runs tauri-action which produces signed bundles.
   build:
+    needs: [version, tag]
     permissions:
       contents: write
     strategy:
@@ -34,19 +134,34 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: "--target universal-apple-darwin"
-            sidecar-cmd: "make build-sidecar-darwin-universal"
-          - platform: windows-latest
+            args: "--target aarch64-apple-darwin"
+            sidecar-cmd: "make build-sidecar-darwin-arm64"
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+            sidecar-cmd: "make build-sidecar-darwin-amd64"
+          - platform: ubuntu-22.04
             args: ""
             sidecar-cmd: "bash scripts/build-sidecar.sh"
-          - platform: ubuntu-22.04
+          - platform: windows-latest
             args: ""
             sidecar-cmd: "bash scripts/build-sidecar.sh"
 
     runs-on: ${{ matrix.platform }}
-
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libayatana-appindicator3-dev
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -57,7 +172,13 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          # Required for `tauri build --target ...` cross-arch on macOS.
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./apps/desktop/src-tauri -> target"
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -70,28 +191,17 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install Linux build dependencies
-        if: startsWith(matrix.platform, 'ubuntu-')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libayatana-appindicator3-dev
-
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Run Ent codegen
-        run: |
-          cd db/ent && go generate ./
+        shell: bash
+        run: cd db/ent && go generate ./
 
       - name: Build sidecar
         shell: bash
         env:
-          VIGIL_VERSION: ${{ github.ref_name }}
+          VIGIL_VERSION: ${{ needs.version.outputs.version }}
         run: ${{ matrix.sidecar-cmd }}
 
       - name: Build & sign desktop app
@@ -101,7 +211,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-          # macOS code signing + notarization
+          # macOS code signing + notarization (optional)
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -109,29 +219,36 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-          # Windows code signing — leave blank if using Azure Trusted Signing instead
+          # Windows code signing (optional — leave blank for unsigned beta)
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         with:
           projectPath: apps/desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: "Vigil ${{ github.ref_name }}"
+          tauriScript: pnpm tauri
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: "Vigil ${{ needs.version.outputs.tag }}"
           releaseBody: |
-            See CHANGELOG.md for what's new.
+            ## Vigil ${{ needs.version.outputs.tag }}
 
-            **macOS**: Download the .dmg, drag Vigil to /Applications, launch.
-            First run on macOS will show a quarantine prompt — Gatekeeper checks
-            against Apple's notarization service before opening.
+            Download the installer for your platform from the assets below.
 
-            **Windows**: Download the .msi, run the installer, accept the
-            SmartScreen warning if it appears (it shouldn't with EV signing,
-            may with OV until reputation builds).
-
-            **Linux**: `.AppImage` is the simplest — chmod +x, run. `.deb`
-            for Ubuntu/Debian: `sudo dpkg -i vigil_*.deb`. ICMP probes use
-            unprivileged ICMP sockets via `pro-bing`; if your distro hasn't
-            set `net.ipv4.ping_group_range` (default on Ubuntu/Fedora), all
-            users have access without sudo.
+            **macOS**: separate Apple Silicon (`aarch64`) and Intel (`x64`) bundles.
+            **Windows**: `.msi` installer.
+            **Linux**: `.deb` for Debian/Ubuntu, `.AppImage` for everything else.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  # 4. Flip the draft release to published once every platform succeeded.
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish release
+        run: gh release edit ${{ needs.version.outputs.tag }} --draft=false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

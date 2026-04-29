@@ -191,20 +191,34 @@ This produces all required sizes + .icns + .ico. Commit the icons.
 
 ### 5. First release
 
-```bash
-git tag v0.0.1
-git push origin v0.0.1
-```
+The release workflow is triggered manually from the Actions tab, *not* by
+pushing a tag. Pattern ported from Pugio/Statio's confirmed-working setup.
 
-The release workflow fires, builds on macos-latest + windows-latest,
-signs/notarizes, uploads bundles to a GitHub Release draft. Edit the
-release body, then click Publish.
+1. Open **Actions → Release → Run workflow**.
+2. Pick the bump type (`patch` / `minor` / `major`). For the first release,
+   pick `patch` — it'll go from `v0.0.0` (no tags exist yet) to `v0.0.1`.
+3. The workflow:
+   - Derives the next version from the latest `v*` tag.
+   - Edits `apps/desktop/src-tauri/tauri.conf.json` + `Cargo.toml` to match.
+   - Commits the bump (`chore: bump desktop version to <version>`) and tags it.
+   - Builds in parallel on macos-latest (×2 — aarch64 and x86_64),
+     ubuntu-22.04, and windows-latest. Each platform builds the Go sidecar,
+     then runs `tauri build`, which signs / notarizes if the secrets are set.
+   - Uploads bundles to a GitHub Release draft.
+   - When every platform succeeds, the final `publish` job flips the draft
+     to a published release.
+
+If a run fails partway through, just re-run the workflow with the same
+bump type — the `Clean up stale tag and release` step removes the
+half-baked artifacts before retrying.
 
 End users install:
 
-- macOS: download `Vigil_<version>_universal.dmg`, drag to Applications.
+- macOS Apple Silicon: download `Vigil_<version>_aarch64.dmg`.
+- macOS Intel: download `Vigil_<version>_x64.dmg`.
 - Windows: download `Vigil_<version>_x64-setup.msi`, run installer.
+- Linux: `.deb` (Debian/Ubuntu) or `.AppImage` (everything else).
 
-Subsequent releases auto-update via `tauri-plugin-updater` — bump the
-version in `apps/desktop/src-tauri/tauri.conf.json` and `package.json`,
-tag, push.
+Subsequent releases auto-update via `tauri-plugin-updater` — re-run the
+Release workflow with the appropriate bump type. Manual file edits to
+`tauri.conf.json` / `Cargo.toml` are not needed; the workflow handles them.

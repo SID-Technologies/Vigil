@@ -32,7 +32,8 @@ Download the latest release from [GitHub Releases](https://github.com/sid-techno
 
 | OS | File | Notes |
 |---|---|---|
-| macOS (Apple Silicon + Intel) | `Vigil_<version>_universal.dmg` | Universal binary, runs on both architectures |
+| macOS Apple Silicon (M1 / M2 / M3 / M4) | `Vigil_<version>_aarch64.dmg` | |
+| macOS Intel | `Vigil_<version>_x64.dmg` | |
 | Windows 10/11 (x64) | `Vigil_<version>_x64-setup.msi` | Installer |
 | Linux (Debian / Ubuntu) | `vigil_<version>_amd64.deb` | `sudo dpkg -i vigil_*.deb` |
 | Linux (everything else) | `vigil_<version>_amd64.AppImage` | `chmod +x` then run |
