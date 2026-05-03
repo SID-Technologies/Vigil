@@ -29,7 +29,7 @@ func Run() int {
 	dataDir := flag.String("data-dir", "", "Directory for SQLite DB, logs, and cached settings (required)")
 	devMode := flag.Bool("dev", false, "Log to stderr instead of <data-dir>/vigil.log (for `go run`)")
 
-	flag.Parse() //nolint:revive // app.Run is the sidecar's effective main; cmd/vigil-sidecar just delegates here
+	flag.Parse()
 
 	if *devMode {
 		vlog.InitializeLoggerStderr()

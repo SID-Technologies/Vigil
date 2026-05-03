@@ -19,12 +19,12 @@ type ICMPProbe struct {
 	target Target
 }
 
-//nolint:revive // self-evident from signature
+// NewICMPProbe constructs an ICMPProbe for the given target.
 func NewICMPProbe(target Target) *ICMPProbe {
 	return &ICMPProbe{target: target}
 }
 
-//nolint:revive // self-evident from signature
+// Target returns the probe's bound target.
 func (p *ICMPProbe) Target() Target { return p.target }
 
 // Run executes the ICMP probe.

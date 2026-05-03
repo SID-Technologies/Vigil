@@ -39,12 +39,12 @@ type UDPDNSProbe struct {
 	target Target
 }
 
-//nolint:revive // self-evident from signature
+// NewUDPDNSProbe constructs a UDPDNSProbe for the given target.
 func NewUDPDNSProbe(target Target) *UDPDNSProbe {
 	return &UDPDNSProbe{target: target}
 }
 
-//nolint:revive // self-evident from signature
+// Target returns the probe's bound target.
 func (p *UDPDNSProbe) Target() Target { return p.target }
 
 // Run executes the UDP DNS probe.
