@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
     Emitter, Manager, State,
 };
@@ -364,6 +364,7 @@ fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 
     // View menu.
     let view_reload = MenuItem::with_id(app, "menu:reload", "Reload", true, Some("CmdOrCtrl+R"))?;
+    #[cfg(debug_assertions)]
     let view_devtools = MenuItem::with_id(
         app,
         "menu:devtools",
@@ -375,21 +376,19 @@ fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let view_history = MenuItem::with_id(app, "menu:nav:/history", "History", true, Some("CmdOrCtrl+2"))?;
     let view_outages = MenuItem::with_id(app, "menu:nav:/outages", "Outages", true, Some("CmdOrCtrl+3"))?;
     let view_targets = MenuItem::with_id(app, "menu:nav:/targets", "Targets", true, Some("CmdOrCtrl+4"))?;
-    let view_submenu = Submenu::with_id_and_items(
-        app,
-        "menu:view",
-        "View",
-        true,
-        &[
-            &view_reload,
-            &view_devtools,
-            &PredefinedMenuItem::separator(app)?,
-            &view_dashboard,
-            &view_history,
-            &view_outages,
-            &view_targets,
-        ],
-    )?;
+
+    // Build the view menu items list with the devtools entry only in debug builds.
+    let mut view_items: Vec<&dyn IsMenuItem<_>> = vec![&view_reload];
+    #[cfg(debug_assertions)]
+    view_items.push(&view_devtools);
+    let view_separator = PredefinedMenuItem::separator(app)?;
+    view_items.push(&view_separator);
+    view_items.push(&view_dashboard);
+    view_items.push(&view_history);
+    view_items.push(&view_outages);
+    view_items.push(&view_targets);
+
+    let view_submenu = Submenu::with_id_and_items(app, "menu:view", "View", true, &view_items)?;
 
     // Window menu — predefined Minimize is the macOS convention.
     let window_submenu = Submenu::with_id_and_items(
@@ -441,6 +440,11 @@ fn handle_menu_event(app: &tauri::AppHandle, id: &str) {
             }
         }
         "menu:devtools" => {
+            // Devtools methods only exist on Tauri's WebviewWindow when the
+            // `devtools` Cargo feature is enabled — Tauri auto-enables it in
+            // debug builds but not in release. Gate accordingly so the menu
+            // item is a no-op in shipped builds rather than a compile error.
+            #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {
                 if window.is_devtools_open() {
                     window.close_devtools();
