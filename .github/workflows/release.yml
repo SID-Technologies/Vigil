@@ -210,20 +210,16 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing key — required for tauri-plugin-updater to ship
+          # signed manifests. Different from Apple/Windows code-signing certs.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-          # macOS code signing + notarization (optional)
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-          # Windows code signing (optional — leave blank for unsigned beta)
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          # NOTE: Apple / Windows code-signing env vars are deliberately not
+          # set here. tauri-action treats empty-string env vars as "try to
+          # sign anyway" and crashes on `security import` during bundling.
+          # When code-signing certs are provisioned, add the env vars back
+          # gated on `if: ${{ secrets.APPLE_CERTIFICATE != '' }}` patterns.
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
