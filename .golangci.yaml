@@ -96,6 +96,18 @@ linters:
         - name: max-control-nesting
           arguments:
             - 10
+        # deep-exit forbids flag.Parse / os.Exit outside main(). Vigil's
+        # cmd/vigil-sidecar/main.go intentionally delegates to app.Run()
+        # so the sidecar entry point is testable. The Run() function IS
+        # the effective main — splitting it is a structural choice we
+        # don't want this rule second-guessing.
+        - name: deep-exit
+          disabled: true
+        # flag-parameter complains about every bool parameter. Most are
+        # legitimate (sample success/failure, "should we panic on err"
+        # error mode, etc.) and the rule's signal-to-noise ratio is poor.
+        - name: flag-parameter
+          disabled: true
     staticcheck:
       checks:
         - all

@@ -15,12 +15,12 @@ type TCPProbe struct {
 	target Target
 }
 
-//nolint:revive // self-evident from signature
+// NewTCPProbe constructs a TCPProbe for the given target.
 func NewTCPProbe(target Target) *TCPProbe {
 	return &TCPProbe{target: target}
 }
 
-//nolint:revive // self-evident from signature
+// Target returns the probe's bound target.
 func (p *TCPProbe) Target() Target { return p.target }
 
 // Run executes the TCP probe.

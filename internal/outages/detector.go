@@ -75,7 +75,6 @@ func (d *Detector) OnCycle(ctx context.Context, ev monitor.CycleEvent) {
 	d.advance(ctx, "network", ev.TSUnixMs, !networkFailed, combinedError(ev.Results))
 }
 
-//nolint:revive // success is the per-sample outcome, not a config flag
 func (d *Detector) advance(ctx context.Context, scope string, tsMs int64, success bool, errPtr *string) {
 	state, ok := d.scopes[scope]
 	if !ok {

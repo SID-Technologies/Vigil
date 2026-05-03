@@ -28,12 +28,12 @@ type UDPSTUNProbe struct {
 	target Target
 }
 
-//nolint:revive // self-evident from signature
+// NewUDPSTUNProbe constructs a UDPSTUNProbe for the given target.
 func NewUDPSTUNProbe(target Target) *UDPSTUNProbe {
 	return &UDPSTUNProbe{target: target}
 }
 
-//nolint:revive // self-evident from signature
+// Target returns the probe's bound target.
 func (p *UDPSTUNProbe) Target() Target { return p.target }
 
 // StunMagicCookie is the RFC 5389 §6 magic cookie carried in every STUN message.
