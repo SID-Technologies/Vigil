@@ -156,12 +156,14 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
+          # Tauri 2 uses the ayatana fork. Do NOT also install the legacy
+          # libappindicator3-dev — it conflicts with the ayatana package and
+          # its required libappindicator3-1 version isn't in current archives.
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
+            libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf \
-            libayatana-appindicator3-dev
+            patchelf
 
       - name: Set up Go
         uses: actions/setup-go@v5
