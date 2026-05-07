@@ -7,8 +7,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/sid-technologies/vigil/db/ent"
-	entsample "github.com/sid-technologies/vigil/db/ent/sample"
-	"github.com/sid-technologies/vigil/db/ent/wifisample"
 	"github.com/sid-technologies/vigil/internal/constants"
 	"github.com/sid-technologies/vigil/internal/netinfo"
 	"github.com/sid-technologies/vigil/internal/probes"
@@ -169,8 +167,3 @@ func (f *flusher) flushSamples(ctx context.Context) {
 		f.onResults(results)
 	}
 }
-
-var (
-	_ = entsample.FieldTsUnixMs
-	_ = wifisample.FieldTsUnixMs
-)

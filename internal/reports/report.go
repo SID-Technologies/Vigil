@@ -103,14 +103,15 @@ func computeSummary(samples []storage.Sample, outages []storage.Outage) summaryS
 
 	rtts := make([]float64, 0, len(samples))
 	for _, s := range samples {
-		if s.Success {
-			out.TotalSuccess++
-
-			if s.RTTMs != nil {
-				rtts = append(rtts, *s.RTTMs)
-			}
-		} else {
+		if !s.Success {
 			out.TotalFail++
+			continue
+		}
+
+		out.TotalSuccess++
+
+		if s.RTTMs != nil {
+			rtts = append(rtts, *s.RTTMs)
 		}
 	}
 
@@ -185,15 +186,16 @@ func computePerTarget(samples []storage.Sample, outages []storage.Outage) []targ
 
 		rttsTimeOrder := make([]float64, 0, len(rows))
 		for _, r := range rows {
-			if r.Success {
-				statsRow.Successful++
-
-				if r.RTTMs != nil {
-					rtts = append(rtts, *r.RTTMs)
-					rttsTimeOrder = append(rttsTimeOrder, *r.RTTMs)
-				}
-			} else {
+			if !r.Success {
 				statsRow.Failed++
+				continue
+			}
+
+			statsRow.Successful++
+
+			if r.RTTMs != nil {
+				rtts = append(rtts, *r.RTTMs)
+				rttsTimeOrder = append(rttsTimeOrder, *r.RTTMs)
 			}
 		}
 
@@ -275,7 +277,10 @@ func computeHourlyBuckets(samples []storage.Sample) []hourlyBucket {
 		b.total++
 		if !s.Success {
 			b.fail++
-		} else if s.RTTMs != nil {
+			continue
+		}
+
+		if s.RTTMs != nil {
 			b.rtts = append(b.rtts, *s.RTTMs)
 		}
 	}

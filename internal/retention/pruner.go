@@ -52,40 +52,36 @@ func (p *Pruner) runOnce(ctx context.Context) {
 	oneMinCutoff := now - int64(cfg.Retention1minDays)*constants.OneDayMs
 	fiveMinCutoff := now - int64(cfg.Retention5minDays)*constants.OneDayMs
 
-	rawDeleted, err := p.client.Sample.Delete().
-		Where(sample.TsUnixMsLT(rawCutoff)).
-		Exec(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("retention: raw samples delete failed")
-	} else if rawDeleted > 0 {
-		log.Info().Int("rows", rawDeleted).Msg("retention: pruned raw samples")
-	}
-
+	// Each prune is independent — one failure shouldn't stop the others.
 	// wifi shares the raw-sample retention window.
-	wifiDeleted, err := p.client.WifiSample.Delete().
-		Where(wifisample.TsUnixMsLT(rawCutoff)).
-		Exec(ctx)
+	rawDeleted, rawErr := p.client.Sample.Delete().
+		Where(sample.TsUnixMsLT(rawCutoff)).Exec(ctx)
+	logPrune("raw samples", rawDeleted, rawErr)
+
+	wifiDeleted, wifiErr := p.client.WifiSample.Delete().
+		Where(wifisample.TsUnixMsLT(rawCutoff)).Exec(ctx)
+	logPrune("wifi samples", wifiDeleted, wifiErr)
+
+	oneMinDeleted, oneMinErr := p.client.Sample1min.Delete().
+		Where(sample1min.BucketStartUnixMsLT(oneMinCutoff)).Exec(ctx)
+	logPrune("1min buckets", oneMinDeleted, oneMinErr)
+
+	fiveDeleted, fiveErr := p.client.Sample5min.Delete().
+		Where(sample5min.BucketStartUnixMsLT(fiveMinCutoff)).Exec(ctx)
+	logPrune("5min buckets", fiveDeleted, fiveErr)
+}
+
+// logPrune emits the right zerolog line for a delete result.
+// No-op on zero rows so quiet hours don't spam the log file.
+func logPrune(table string, rows int, err error) {
 	if err != nil {
-		log.Error().Err(err).Msg("retention: wifi samples delete failed")
-	} else if wifiDeleted > 0 {
-		log.Info().Int("rows", wifiDeleted).Msg("retention: pruned wifi samples")
+		log.Error().Err(err).Msgf("retention: %s delete failed", table)
+		return
 	}
 
-	oneMinDeleted, err := p.client.Sample1min.Delete().
-		Where(sample1min.BucketStartUnixMsLT(oneMinCutoff)).
-		Exec(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("retention: 1min samples delete failed")
-	} else if oneMinDeleted > 0 {
-		log.Info().Int("rows", oneMinDeleted).Msg("retention: pruned 1min buckets")
+	if rows == 0 {
+		return
 	}
 
-	fiveDeleted, err := p.client.Sample5min.Delete().
-		Where(sample5min.BucketStartUnixMsLT(fiveMinCutoff)).
-		Exec(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("retention: 5min samples delete failed")
-	} else if fiveDeleted > 0 {
-		log.Info().Int("rows", fiveDeleted).Msg("retention: pruned 5min buckets")
-	}
+	log.Info().Int("rows", rows).Msgf("retention: pruned %s", table)
 }

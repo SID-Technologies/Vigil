@@ -31,15 +31,15 @@ func Run() int {
 
 	flag.Parse()
 
-	if *devMode {
+	// Three mutually-exclusive logger setups, ordered by specificity.
+	switch {
+	case *devMode:
 		vlog.InitializeLoggerStderr()
-	} else {
-		if *dataDir == "" {
-			// stdout is reserved for IPC, no log file yet — stderr only.
-			_, _ = os.Stderr.WriteString("vigil-sidecar: --data-dir is required (or pass --dev)\n")
-			return 2
-		}
-
+	case *dataDir == "":
+		// stdout is reserved for IPC, no log file yet — stderr only.
+		_, _ = os.Stderr.WriteString("vigil-sidecar: --data-dir is required (or pass --dev)\n")
+		return 2
+	default:
 		_, err := vlog.InitializeLogger(*dataDir)
 		if err != nil {
 			_, _ = os.Stderr.WriteString("vigil-sidecar: log init failed: " + err.Error() + "\n")
