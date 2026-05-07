@@ -499,8 +499,12 @@ function parseRangeFromUrl(searchParams: URLSearchParams): TimeRange | null {
   return null;
 }
 
+// Mirrors the backend's pickGranularity in internal/ipc/handlers_samples.go.
+// Keep these boundaries in sync — the label here is what the user sees;
+// the backend is what actually decides what data comes back.
 function predictedGranularity(rangeMs: number): string {
-  if (rangeMs <= 2 * 60 * 60 * 1000) return 'raw (per-probe)';
+  if (rangeMs <= 30 * 60 * 1000) return 'raw (per-probe)';
+  if (rangeMs <= 6 * 60 * 60 * 1000) return '1-minute buckets';
   if (rangeMs <= 7 * 24 * 60 * 60 * 1000) return '5-minute buckets';
   return '1-hour buckets';
 }
