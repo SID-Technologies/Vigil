@@ -206,6 +206,27 @@ jobs:
           VIGIL_VERSION: ${{ needs.version.outputs.version }}
         run: ${{ matrix.sidecar-cmd }}
 
+      # Conditionally export Apple signing env vars only when the cert secret
+      # has a value. tauri-action would otherwise try to `security import` an
+      # empty string and crash. This step is a no-op on non-macOS runners and
+      # on macOS without secrets configured (i.e. unsigned beta builds).
+      - name: Configure macOS code signing
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          if [ -n "$APPLE_CERT" ]; then
+            echo "APPLE_CERTIFICATE=$APPLE_CERT" >> "$GITHUB_ENV"
+            echo "APPLE_CERTIFICATE_PASSWORD=${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "APPLE_SIGNING_IDENTITY=${{ secrets.APPLE_SIGNING_IDENTITY }}" >> "$GITHUB_ENV"
+            echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> "$GITHUB_ENV"
+            echo "APPLE_PASSWORD=${{ secrets.APPLE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> "$GITHUB_ENV"
+            echo "macOS signing: enabled"
+          else
+            echo "macOS signing: skipped (APPLE_CERTIFICATE not set — unsigned build)"
+          fi
+
       - name: Build & sign desktop app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -214,12 +235,7 @@ jobs:
           # signed manifests. Different from Apple/Windows code-signing certs.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-          # NOTE: Apple / Windows code-signing env vars are deliberately not
-          # set here. tauri-action treats empty-string env vars as "try to
-          # sign anyway" and crashes on `security import` during bundling.
-          # When code-signing certs are provisioned, add the env vars back
-          # gated on `if: ${{ secrets.APPLE_CERTIFICATE != '' }}` patterns.
+          # APPLE_* vars are exported by the previous step when secrets exist.
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
