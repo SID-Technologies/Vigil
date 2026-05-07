@@ -108,16 +108,20 @@ func RegisterSampleHandlers(s *Server, store *storage.Client) {
 
 // pickGranularity targets ~60-600 points per series so recharts stays smooth.
 //
-//	≤ 1h → raw, ≤ 6h → 1min, ≤ 7d → 5min, otherwise 1h.
+// At raw 2.5s cadence × 13 default targets, a 1-hour window is already 1,440
+// points per series — past the legibility sweet spot. Drop the raw cutoff to
+// 30 minutes so anything ≥1h falls into 1-min aggregation (60 points/hour).
+//
+//	≤ 30m → raw, ≤ 6h → 1min, ≤ 7d → 5min, otherwise 1h.
 func pickGranularity(windowMs int64) string {
 	const (
-		oneHour   = int64(60 * 60 * 1000)
+		thirtyMin = int64(30 * 60 * 1000)
 		sixHours  = int64(6 * 60 * 60 * 1000)
 		sevenDays = int64(7 * 24 * 60 * 60 * 1000)
 	)
 
 	switch {
-	case windowMs <= oneHour:
+	case windowMs <= thirtyMin:
 		return granularityRaw
 	case windowMs <= sixHours:
 		return granularity1Min

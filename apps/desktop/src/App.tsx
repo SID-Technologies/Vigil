@@ -12,7 +12,6 @@ import { createTamagui, TamaguiProvider, Theme, XStack, YStack } from 'tamagui';
 
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { Sidebar } from './components/Sidebar';
-import { UpdateBanner } from './components/UpdateBanner';
 import { WelcomeTour } from './components/WelcomeTour';
 import { useMenuEvents } from './hooks/useMenuEvents';
 import { DashboardPage } from './pages/Dashboard';
@@ -72,7 +71,6 @@ function AppContent() {
         </XStack>
         <WelcomeTour />
         <KeyboardShortcuts />
-        <UpdateBanner />
       </Theme>
     </TamaguiProvider>
   );

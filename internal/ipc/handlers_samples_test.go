@@ -19,8 +19,10 @@ func TestPickGranularity(t *testing.T) {
 		windowMs int64
 		want     string
 	}{
-		{"sub_hour", 30 * minute, granularityRaw},
-		{"exactly_hour", hour, granularityRaw},
+		{"fifteen_min", 15 * minute, granularityRaw},
+		{"thirty_min", 30 * minute, granularityRaw},
+		{"forty_five_min", 45 * minute, granularity1Min},
+		{"exactly_hour", hour, granularity1Min},
 		{"three_hours", 3 * hour, granularity1Min},
 		{"six_hours", 6 * hour, granularity1Min},
 		{"twelve_hours", 12 * hour, granularity5min},
