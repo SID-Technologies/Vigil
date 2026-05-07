@@ -5,6 +5,8 @@ import { relaunch } from '@tauri-apps/plugin-process';
 interface UpdaterState {
   available: { version: string; currentVersion: string } | null;
   installing: boolean;
+  /** Last error from a check or install attempt, surfaced for debug visibility. */
+  error: string | null;
   install: () => Promise<void>;
   dismiss: () => void;
 }
@@ -17,17 +19,31 @@ export function useUpdater(): UpdaterState {
   const [update, setUpdate] = useState<Update | null>(null);
   const [installing, setInstalling] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     const id = setTimeout(async () => {
+      // Logged unconditionally so end users with the WebView devtools open
+      // see whether the check ran. Cheap diagnostic for "the banner never
+      // appeared" reports.
+      console.log('[updater] checking for updates...');
       try {
         const found = await check();
-        if (!cancelled && found) setUpdate(found);
-      } catch {
-        // Most common cause: no internet. Silently no-op — the user finds
-        // out about updates the next time they relaunch with connectivity.
+        if (cancelled) return;
+        if (found) {
+          console.log(
+            `[updater] update available: ${found.currentVersion} -> ${found.version}`,
+          );
+          setUpdate(found);
+        } else {
+          console.log('[updater] no update available');
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[updater] check failed:', message);
+        if (!cancelled) setError(message);
       }
     }, CHECK_DELAY_MS);
 
@@ -40,11 +56,16 @@ export function useUpdater(): UpdaterState {
   const install = async () => {
     if (!update) return;
     setInstalling(true);
+    setError(null);
     try {
+      console.log('[updater] downloading + installing...');
       await update.downloadAndInstall();
+      console.log('[updater] install complete, relaunching');
       await relaunch();
     } catch (err) {
-      console.error('updater: install failed', err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[updater] install failed:', message);
+      setError(message);
       setInstalling(false);
     }
   };
@@ -55,6 +76,7 @@ export function useUpdater(): UpdaterState {
         ? { version: update.version, currentVersion: update.currentVersion }
         : null,
     installing,
+    error,
     install,
     dismiss: () => setDismissed(true),
   };

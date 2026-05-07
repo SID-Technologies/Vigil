@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
+  ArrowCircleUp,
   ChartLine,
   Clock,
   Gauge,
@@ -11,7 +12,9 @@ import {
 import { getVersion } from '@tauri-apps/api/app';
 import { XStack, YStack, Text } from 'tamagui';
 
-import { useThemeController } from '@repo/configs/themeController';
+import { useAccent, useThemeController } from '@repo/configs/themeController';
+
+import { useUpdater } from '../hooks/useUpdater';
 
 interface NavItem {
   to: string;
@@ -32,6 +35,8 @@ const NAV_ITEMS: NavItem[] = [
 export function Sidebar() {
   const location = useLocation();
   const { isDark, toggleTheme } = useThemeController();
+  const accent = useAccent();
+  const { available, installing, install } = useUpdater();
   const [version, setVersion] = useState('dev');
 
   useEffect(() => {
@@ -121,9 +126,39 @@ export function Sidebar() {
             click to flip
           </Text>
         </XStack>
-        <Text fontSize={10} color="$color8" textAlign="center">
-          v{version}
-        </Text>
+
+        {available ? (
+          // Update available — single row anchoring on the version number.
+          // Click triggers download + install + relaunch via useUpdater.
+          <XStack
+            paddingVertical="$1.5"
+            paddingHorizontal="$2"
+            borderRadius="$2"
+            backgroundColor="$accentBackground"
+            borderWidth={1}
+            borderColor="$accentBackground"
+            alignItems="center"
+            justifyContent="center"
+            gap="$1.5"
+            cursor={installing ? 'progress' : 'pointer'}
+            opacity={installing ? 0.7 : 1}
+            hoverStyle={{ opacity: installing ? 0.7 : 0.9 }}
+            onPress={() => {
+              if (!installing) install();
+            }}
+          >
+            <ArrowCircleUp size={12} color={accent} weight="fill" />
+            <Text fontSize={10} color="$accentColor" fontWeight="600" className="vigil-num">
+              {installing
+                ? `Installing v${available.version}...`
+                : `v${available.currentVersion} → v${available.version}`}
+            </Text>
+          </XStack>
+        ) : (
+          <Text fontSize={10} color="$color8" textAlign="center" className="vigil-num">
+            v{version}
+          </Text>
+        )}
       </YStack>
     </YStack>
   );
