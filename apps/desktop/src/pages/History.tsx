@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Export } from '@phosphor-icons/react';
+
+import { useAccent } from '@repo/configs/themeController';
 import {
   CartesianGrid,
   Line,
@@ -50,6 +52,7 @@ export function HistoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const allTargets = useAllProbeTargets();
   const { getColor } = useColorPalette();
+  const accent = useAccent();
 
   // Initialize from URL once. Keep selection + range in component state,
   // then sync to URL on change so back/forward navigation works.
@@ -105,7 +108,7 @@ export function HistoryPage() {
             size="$3"
             backgroundColor="$accentBackground"
             color="$accentColor"
-            icon={<Export size={14} color="var(--accentColor)" />}
+            icon={<Export size={14} color={accent} />}
             onPress={() => setReportOpen(true)}
             hoverStyle={{ opacity: 0.9 }}
           >

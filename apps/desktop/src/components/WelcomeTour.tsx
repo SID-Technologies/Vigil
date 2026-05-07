@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, ArrowSquareOut, Clock, ArrowRight, ArrowLeft } from '@phosphor-icons/react';
 import { Button, Dialog, Unspaced, XStack, YStack, Text } from 'tamagui';
 
+import { useAccent, useThemeController } from '@repo/configs/themeController';
+
 const STORAGE_KEY = 'vigil:welcome-seen';
 
 interface Step {
@@ -50,6 +52,11 @@ export function WelcomeTour() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const navigate = useNavigate();
+  const accent = useAccent();
+  const { isDark } = useThemeController();
+  // Secondary muted color for the Back button arrow — visible against either
+  // surface tone (slate in dark, tan in light) without competing with accent.
+  const mutedIcon = isDark ? '#a8b4c0' : '#5a6470';
 
   // Decide on mount whether to show the tour. Defer one tick so the rest of
   // the app paints first — the modal arriving 50ms after first paint feels
@@ -148,7 +155,7 @@ export function WelcomeTour() {
             borderWidth={1}
             borderColor="$accentBackground"
           >
-            <Icon size={28} color="var(--accentColor)" weight="duotone" />
+            <Icon size={28} color={accent} weight="duotone" />
           </YStack>
 
           <YStack gap="$2">
@@ -173,7 +180,7 @@ export function WelcomeTour() {
                 <Button
                   size="$3"
                   chromeless
-                  icon={<ArrowLeft size={12} color="var(--color9)" />}
+                  icon={<ArrowLeft size={12} color={mutedIcon} />}
                   onPress={() => setStep((s) => Math.max(0, s - 1))}
                 >
                   <Text fontSize={12} color="$color11">Back</Text>
@@ -185,7 +192,7 @@ export function WelcomeTour() {
                 color="$accentColor"
                 iconAfter={
                   isLast ? undefined : (
-                    <ArrowRight size={12} color="var(--accentColor)" />
+                    <ArrowRight size={12} color={accent} />
                   )
                 }
                 onPress={() => {

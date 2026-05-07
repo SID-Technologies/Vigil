@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Folder, FileCsv, FileText, FileHtml, Check } from '@phosphor-icons/react';
 import { Button, XStack, YStack, Text } from 'tamagui';
 
+import { useAccent } from '@repo/configs/themeController';
+
 import { Toggle } from './Toggle';
 
 import { Modal } from './Modal';
@@ -39,6 +41,7 @@ export function GenerateReportModal({
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<{ paths: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const accent = useAccent();
 
   const reset = () => {
     setResult(null);
@@ -127,7 +130,7 @@ export function GenerateReportModal({
               backgroundColor="$accentBackground"
               color="$accentColor"
               onPress={reveal}
-              icon={<Folder size={14} color="var(--accentColor)" />}
+              icon={<Folder size={14} color={accent} />}
             >
               Reveal in Finder
             </Button>
@@ -153,7 +156,7 @@ export function GenerateReportModal({
       {result ? (
         <YStack gap="$2">
           <XStack gap="$2" alignItems="center">
-            <Check size={16} color="var(--accentColor)" weight="bold" />
+            <Check size={16} color={accent} weight="bold" />
             <Text fontSize={13} color="$color12" fontWeight="600">
               Wrote {result.paths.length} file{result.paths.length === 1 ? '' : 's'}
             </Text>

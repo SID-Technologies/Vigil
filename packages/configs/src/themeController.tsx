@@ -3,21 +3,23 @@ import { createContext, useContext, useState, useEffect, useCallback, type FC, R
 // Base theme (light/dark)
 export type ThemeMode = 'light' | 'dark' | 'system';
 
-// Theme style options. Vigil ships `nightwatch` as the default; the others are
-// inherited from the Pugio config so users can switch.
-export type ThemeStyle = 'nightwatch' | 'default' | 'torch' | 'statio';
+// Vigil ships a single theme — `nightwatch`. The style enum and picker were
+// removed in v0.0.x because the alternates (default/torch/statio) were never
+// brought to parity with nightwatch's contrast and the chart palette assumes
+// the watchfire-amber accent. Type kept for backwards-compatible callers.
+export type ThemeStyle = 'nightwatch';
 
-// Accent color options (for default theme only)
-export type AccentColor = 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'teal';
+// Accent color options (legacy — only nightwatch's amber is used now)
+export type AccentColor = 'orange';
 
 // The actual Tamagui theme name
-export type TamaguiThemeName =
-  | 'light' | 'dark'
-  | 'light_blue' | 'dark_blue'
-  | 'light_green' | 'dark_green'
-  | 'light_torch' | 'dark_torch'
-  | 'light_statio' | 'dark_statio'
-  | 'light_nightwatch' | 'dark_nightwatch';
+export type TamaguiThemeName = 'light_nightwatch' | 'dark_nightwatch';
+
+// Resolved accent color hex per mode. Used directly (not via CSS var) because
+// Tauri's WebView doesn't reliably propagate document-root CSS variables into
+// recharts SVG strokes or phosphor icon `color` props on first paint.
+const ACCENT_DARK = '#e0a458'; // watchfire amber against #0b1116 slate
+const ACCENT_LIGHT = '#b8742a'; // darker burnt-amber against #f6f1e7 tan
 
 interface ThemeContextType {
   themeMode: ThemeMode;
@@ -26,8 +28,6 @@ interface ThemeContextType {
   resolvedTheme: TamaguiThemeName;
   isDark: boolean;
   setThemeMode: (mode: ThemeMode) => void;
-  setThemeStyle: (style: ThemeStyle) => void;
-  setAccentColor: (color: AccentColor) => void;
   toggleTheme: () => void;
   isTransitioning: boolean;
 }
@@ -35,17 +35,14 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType>({
   themeMode: 'dark',
   themeStyle: 'nightwatch',
-  accentColor: 'blue',
+  accentColor: 'orange',
   resolvedTheme: 'dark_nightwatch',
   isDark: true,
   setThemeMode: () => {},
-  setThemeStyle: () => {},
-  setAccentColor: () => {},
   toggleTheme: () => {},
   isTransitioning: false,
 });
 
-// Helper to detect system theme preference
 const getSystemTheme = (): 'light' | 'dark' => {
   if (typeof window !== 'undefined' && window.matchMedia) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -53,27 +50,7 @@ const getSystemTheme = (): 'light' | 'dark' => {
   return 'dark';
 };
 
-// Helper to resolve theme name for Tamagui
-const resolveThemeName = (
-  mode: ThemeMode,
-  style: ThemeStyle,
-  systemTheme: 'light' | 'dark'
-): TamaguiThemeName => {
-  const baseTheme = mode === 'system' ? systemTheme : mode;
-
-  // Named theme styles map to sub-themes
-  if (style !== 'default') {
-    return `${baseTheme}_${style}` as TamaguiThemeName;
-  }
-
-  // Default theme
-  return baseTheme;
-};
-
 const LS_THEME_MODE = 'vigil-theme-mode';
-const LS_THEME_STYLE = 'vigil-theme-style';
-
-const VALID_STYLES: ThemeStyle[] = ['nightwatch', 'default', 'torch', 'statio'];
 
 export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
@@ -81,21 +58,11 @@ export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
       const stored = localStorage.getItem(LS_THEME_MODE);
       if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
     } catch {}
-    // Vigil defaults to dark — the watchman lives at night.
     return 'dark';
   });
-  const [themeStyle, setThemeStyleState] = useState<ThemeStyle>(() => {
-    try {
-      const stored = localStorage.getItem(LS_THEME_STYLE);
-      if (stored && VALID_STYLES.includes(stored as ThemeStyle)) return stored as ThemeStyle;
-    } catch {}
-    return 'nightwatch';
-  });
-  const [accentColor, setAccentColorState] = useState<AccentColor>('orange');
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(getSystemTheme);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Listen for system theme changes
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
 
@@ -108,53 +75,27 @@ export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
-  // Resolve the actual theme
   const isDark = themeMode === 'system' ? systemTheme === 'dark' : themeMode === 'dark';
-  const resolvedTheme = resolveThemeName(themeMode, themeStyle, systemTheme);
+  const resolvedTheme: TamaguiThemeName = isDark ? 'dark_nightwatch' : 'light_nightwatch';
 
-  // Per-style accent color as CSS custom property.
-  // Tamagui's createThemes doesn't propagate `extra` to child themes, so we
-  // set the accent color manually on the document root so components can use
-  // `var(--accentColor)` for things like chart highlights and active nav state.
+  // Mirror the resolved accent into a CSS variable for consumers that work
+  // through CSS (global.css uses it for focus rings + selection highlight).
+  // React-tree consumers should prefer the useAccent() hook below — it reads
+  // the same value but doesn't depend on CSS var propagation, which is flaky
+  // in Tauri's WebView for inline styles + recharts SVG strokes.
   useEffect(() => {
-    const accentMap: Record<ThemeStyle, { light: string; dark: string }> = {
-      nightwatch: { light: '#b8742a', dark: '#e0a458' },
-      default: { light: '#0090ff', dark: '#0090ff' },
-      torch: { light: '#8b5cf6', dark: '#8b5cf6' },
-      statio: { light: '#b08d3e', dark: '#c8a84e' },
-    };
-    const colors = accentMap[themeStyle] || accentMap.nightwatch;
+    const accent = isDark ? ACCENT_DARK : ACCENT_LIGHT;
+    const contrast = isDark ? '#0b1116' : '#ffffff';
     const root = document.documentElement;
-    root.style.setProperty('--accentColor', isDark ? colors.dark : colors.light);
-    root.style.setProperty('--accentColorContrast', isDark ? '#0b1116' : '#ffffff');
-  }, [themeStyle, isDark]);
+    root.style.setProperty('--accentColor', accent);
+    root.style.setProperty('--accentColorContrast', contrast);
+  }, [isDark]);
 
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setIsTransitioning(true);
     setTimeout(() => {
       setThemeModeState(mode);
       try { localStorage.setItem(LS_THEME_MODE, mode); } catch {}
-    }, 0);
-    setTimeout(() => {
-      setIsTransitioning(false);
-    }, 300);
-  }, []);
-
-  const setThemeStyle = useCallback((style: ThemeStyle) => {
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setThemeStyleState(style);
-      try { localStorage.setItem(LS_THEME_STYLE, style); } catch {}
-    }, 0);
-    setTimeout(() => {
-      setIsTransitioning(false);
-    }, 300);
-  }, []);
-
-  const setAccentColor = useCallback((color: AccentColor) => {
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setAccentColorState(color);
     }, 0);
     setTimeout(() => {
       setIsTransitioning(false);
@@ -169,13 +110,11 @@ export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
     <ThemeContext.Provider
       value={{
         themeMode,
-        themeStyle,
-        accentColor,
+        themeStyle: 'nightwatch',
+        accentColor: 'orange',
         resolvedTheme,
         isDark,
         setThemeMode,
-        setThemeStyle,
-        setAccentColor,
         toggleTheme,
         isTransitioning,
       }}
@@ -186,6 +125,15 @@ export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 };
 
 export const useThemeController = () => useContext(ThemeContext);
+
+// useAccent returns the resolved accent hex string for the current mode.
+// Use this anywhere you'd otherwise reach for `var(--accentColor)` in an
+// inline style, recharts prop, or phosphor icon color — those don't always
+// pick up the CSS variable in Tauri's WebView, and React state is reliable.
+export const useAccent = (): string => {
+  const { isDark } = useThemeController();
+  return isDark ? ACCENT_DARK : ACCENT_LIGHT;
+};
 
 // Legacy export for backwards compatibility
 export const useTheme = useThemeController;

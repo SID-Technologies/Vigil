@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash, Lock, Check } from '@phosphor-icons/react';
 import { Button, Input, Select, XStack, YStack, Text } from 'tamagui';
 
+import { useAccent } from '@repo/configs/themeController';
+
 import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FormField } from '../components/FormField';
@@ -39,6 +41,7 @@ export function TargetsPage() {
   const targets = useTargets();
   const update = useUpdateTarget();
   const del = useDeleteTarget();
+  const accent = useAccent();
 
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -122,7 +125,7 @@ export function TargetsPage() {
               size="$3"
               backgroundColor="$accentBackground"
               color="$accentColor"
-              icon={<Plus size={14} color="var(--accentColor)" />}
+              icon={<Plus size={14} color={accent} />}
               onPress={() => setAddOpen(true)}
               hoverStyle={{ opacity: 0.9 }}
             >
@@ -301,6 +304,7 @@ function SelectionHeader({
 }
 
 function Checkbox({ checked, onPress }: { checked: boolean; onPress: () => void }) {
+  const accent = useAccent();
   return (
     <XStack
       width={18}
@@ -319,7 +323,7 @@ function Checkbox({ checked, onPress }: { checked: boolean; onPress: () => void 
         onPress();
       }}
     >
-      {checked ? <Check size={11} color="var(--accentColor)" weight="bold" /> : null}
+      {checked ? <Check size={11} color={accent} weight="bold" /> : null}
     </XStack>
   );
 }

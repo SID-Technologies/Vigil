@@ -29,11 +29,9 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/settings', icon: Gear, label: 'Settings' },
 ];
 
-const THEME_STYLES = ['nightwatch', 'default', 'torch', 'statio'] as const;
-
 export function Sidebar() {
   const location = useLocation();
-  const { themeStyle, setThemeStyle, isDark, toggleTheme } = useThemeController();
+  const { isDark, toggleTheme } = useThemeController();
   const [version, setVersion] = useState('dev');
 
   useEffect(() => {
@@ -105,52 +103,24 @@ export function Sidebar() {
       </YStack>
 
       <YStack paddingHorizontal="$3" gap="$2">
-        <YStack
-          paddingVertical="$2"
+        <XStack
+          paddingVertical="$1.5"
           paddingHorizontal="$2"
           borderRadius="$2"
           backgroundColor="$color3"
-          gap="$1"
+          cursor="pointer"
+          alignItems="center"
+          justifyContent="space-between"
+          hoverStyle={{ backgroundColor: '$color4' }}
+          onPress={() => toggleTheme()}
         >
-          <Text fontSize={10} color="$color8" letterSpacing={0.5}>
-            THEME
+          <Text fontSize={11} color="$color10">
+            {isDark ? '◐ Dark' : '◑ Light'}
           </Text>
-          <XStack flexWrap="wrap" gap="$1">
-            {THEME_STYLES.map((s) => (
-              <XStack
-                key={s}
-                paddingHorizontal="$1.5"
-                paddingVertical="$1"
-                borderRadius="$1"
-                backgroundColor={themeStyle === s ? '$accentBackground' : 'transparent'}
-                hoverStyle={{ backgroundColor: themeStyle === s ? '$accentBackground' : '$color4' }}
-                cursor="pointer"
-                onPress={() => setThemeStyle(s)}
-              >
-                <Text
-                  fontSize={10}
-                  color={themeStyle === s ? '$accentColor' : '$color10'}
-                  fontWeight={themeStyle === s ? '600' : '400'}
-                >
-                  {s}
-                </Text>
-              </XStack>
-            ))}
-          </XStack>
-          <XStack
-            marginTop="$1"
-            paddingVertical="$1"
-            paddingHorizontal="$1.5"
-            borderRadius="$1"
-            cursor="pointer"
-            hoverStyle={{ backgroundColor: '$color4' }}
-            onPress={() => toggleTheme()}
-          >
-            <Text fontSize={10} color="$color9">
-              {isDark ? '◐ dark' : '◑ light'} — click to flip
-            </Text>
-          </XStack>
-        </YStack>
+          <Text fontSize={10} color="$color8">
+            click to flip
+          </Text>
+        </XStack>
         <Text fontSize={10} color="$color8" textAlign="center">
           v{version}
         </Text>

@@ -12,6 +12,8 @@ import {
 } from 'recharts';
 import { XStack, YStack, Text } from 'tamagui';
 
+import { useAccent } from '@repo/configs/themeController';
+
 import { Card } from './Card';
 import { ChartFilterBar } from './ChartFilterBar';
 import { ChartTooltip } from './ChartTooltip';
@@ -46,6 +48,7 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
   const { buffer, version } = useLiveProbes();
   const allTargets = useAllProbeTargets();
   const { getColor } = useColorPalette();
+  const accent = useAccent();
 
   // Flatten the per-target buffer to a single ProbeResult[] for the
   // existing rollup/pivot helpers. Filter to the active target set.
@@ -67,7 +70,7 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
 
   return (
     <Card
-      title="RTT — last hour"
+      title="RTT — last 15 min"
       trailing={
         <XStack gap="$2" alignItems="center">
           <PulsingDot color="#e0a458" size={10} pulseKey={tick} />
@@ -95,6 +98,7 @@ export function RTTChart({ selectedLabels, onSetAll, onClear }: RTTChartProps) {
           fromMs={fromMs}
           toMs={toMs}
           xTicks={xTicks}
+          accent={accent}
         />
       ) : (
         <PerTargetLineChart
@@ -143,11 +147,13 @@ function MedianAreaChart({
   fromMs,
   toMs,
   xTicks,
+  accent,
 }: {
   data: MedianPoint[];
   fromMs: number;
   toMs: number;
   xTicks: number[];
+  accent: string;
 }) {
   return (
     <YStack height={220}>
@@ -155,8 +161,8 @@ function MedianAreaChart({
         <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
           <defs>
             <linearGradient id="rttFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--accentColor)" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="var(--accentColor)" stopOpacity={0.02} />
+              <stop offset="0%" stopColor={accent} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={accent} stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--borderColor)" strokeDasharray="3 3" />
@@ -177,7 +183,7 @@ function MedianAreaChart({
           <Area
             type="monotone"
             dataKey="medianP50"
-            stroke="var(--accentColor)"
+            stroke={accent}
             strokeWidth={2}
             fill="url(#rttFill)"
             isAnimationActive={false}

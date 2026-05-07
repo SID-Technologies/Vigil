@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import type { TooltipProps } from 'recharts';
 
+import { useAccent } from '@repo/configs/themeController';
+
 interface ChartTooltipProps extends TooltipProps<number, string> {
   /** Optional formatter for the timestamp shown at the top. */
   formatLabel?: (ms: number) => string;
@@ -31,6 +33,7 @@ interface ChartTooltipProps extends TooltipProps<number, string> {
  *     class generation inside recharts' DOM subtree.
  */
 export function ChartTooltip({ active, payload, label, formatLabel, unit = 'ms', caption }: ChartTooltipProps) {
+  const accent = useAccent();
   if (!active || !payload || payload.length === 0) return null;
 
   const labelText =
@@ -85,7 +88,7 @@ export function ChartTooltip({ active, payload, label, formatLabel, unit = 'ms',
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
-                background: r.color || 'var(--accentColor)',
+                background: r.color || accent,
                 flexShrink: 0,
               }}
             />
