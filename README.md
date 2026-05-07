@@ -28,49 +28,45 @@ Pick any window from 1 hour to 30 days. RTT trend, uptime %, p50/p95/p99 latency
 
 ## Install
 
-Download the latest release from [GitHub Releases](https://github.com/sid-technologies/vigil/releases/latest). Pick the file for your OS:
-
-| OS | File | Notes |
-|---|---|---|
-| macOS Apple Silicon (M1 / M2 / M3 / M4) | `Vigil_<version>_aarch64.dmg` | |
-| macOS Intel | `Vigil_<version>_x64.dmg` | |
-| Windows 10/11 (x64) | `Vigil_<version>_x64-setup.msi` | Installer |
-| Linux (Debian / Ubuntu) | `vigil_<version>_amd64.deb` | `sudo dpkg -i vigil_*.deb` |
-| Linux (everything else) | `vigil_<version>_amd64.AppImage` | `chmod +x` then run |
+Grab the latest release from **[github.com/sid-technologies/vigil/releases/latest](https://github.com/sid-technologies/vigil/releases/latest)**.
 
 ### macOS
 
-1. Open the `.dmg` and drag **Vigil.app** to your **Applications** folder.
-2. Open Applications, double-click Vigil.
+| Mac | Download |
+|---|---|
+| Apple Silicon (M1 / M2 / M3 / M4) | `Vigil_<version>_aarch64.dmg` |
+| Intel | `Vigil_<version>_x64.dmg` |
 
-**If you see "Vigil can't be opened because Apple cannot check it for malicious software":** that means this build is unsigned. Open **System Settings → Privacy & Security**, scroll to the bottom, and click **"Open Anyway"** next to the Vigil notice. Confirm in the prompt that follows. After this first time, Vigil opens normally on every launch.
-
-(Signed builds skip this step entirely.)
+Open the `.dmg`, drag **Vigil** to **Applications**, launch. That's it — builds are signed and notarized, so Gatekeeper just opens them.
 
 ### Windows
 
-1. Run the `.msi` installer. Defender SmartScreen may show **"Windows protected your PC"** if the build is unsigned.
-2. Click **More info → Run anyway**.
-3. Walk through the installer (one screen, no choices to make).
-4. Vigil launches automatically; check the system tray (bottom-right corner).
+Download `Vigil_<version>_x64_en-US.msi`, run the installer.
+
+> SmartScreen may show **"Windows protected your PC"** the first time. Click **More info → Run anyway**. Windows code-signing is on the roadmap; until then, the warning is expected.
 
 ### Linux
 
-**.deb (Ubuntu, Debian, Mint, Pop!_OS):**
+Pick whichever fits your distro:
 
 ```bash
-sudo dpkg -i vigil_*_amd64.deb
-sudo apt-get install -f   # if dependency errors, this resolves them
+# Debian / Ubuntu / Mint / Pop!_OS
+sudo dpkg -i vigil_<version>_amd64.deb
+sudo apt-get install -f   # only if dpkg complains about deps
+
+# Fedora / RHEL / openSUSE
+sudo rpm -i Vigil-<version>-1.x86_64.rpm
+
+# Anything else (Arch, NixOS, etc.)
+chmod +x Vigil_<version>_amd64.AppImage
+./Vigil_<version>_amd64.AppImage
 ```
 
-**.AppImage (Fedora, Arch, NixOS, anything else):**
+ICMP probes use unprivileged sockets — works without sudo on Ubuntu/Fedora out of the box. On locked-down distros, add yourself to `net.ipv4.ping_group_range`.
 
-```bash
-chmod +x Vigil_*_amd64.AppImage
-./Vigil_*_amd64.AppImage
-```
+### Auto-update
 
-ICMP probes use unprivileged ICMP sockets. On Ubuntu / Fedora this works without sudo for any user; on locked-down distros you may need to add yourself to `net.ipv4.ping_group_range`.
+Once installed, Vigil checks for updates on launch. When a new version ships, the sidebar shows `v<current> → v<new>`. Click it to install — Vigil downloads, verifies the signature, and relaunches itself.
 
 ## First launch
 
