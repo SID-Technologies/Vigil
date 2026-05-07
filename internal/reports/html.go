@@ -67,22 +67,22 @@ func buildChartData(rep *report) chartPayload {
 	}
 	for _, b := range rep.HourlyBuckets {
 		out.Hours = append(out.Hours, b.Hour)
-		if b.MedianRTT != nil {
-			out.Median = append(out.Median, *b.MedianRTT)
-		} else {
-			out.Median = append(out.Median, 0)
-		}
-
-		if b.P95RTT != nil {
-			out.P95 = append(out.P95, *b.P95RTT)
-		} else {
-			out.P95 = append(out.P95, 0)
-		}
-
+		out.Median = append(out.Median, floatOrZero(b.MedianRTT))
+		out.P95 = append(out.P95, floatOrZero(b.P95RTT))
 		out.UptimePct = append(out.UptimePct, b.UptimePct)
 	}
 
 	return out
+}
+
+// floatOrZero unboxes a *float64 to 0 for missing values — recharts can't
+// render a nil so we substitute the floor value instead of dropping the bucket.
+func floatOrZero(p *float64) float64 {
+	if p == nil {
+		return 0
+	}
+
+	return *p
 }
 
 // funcMap registers helpers usable inside templates/*.tmpl.

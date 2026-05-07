@@ -101,11 +101,13 @@ func (d *Detector) advance(ctx context.Context, scope string, tsMs int64, succes
 	}
 
 	state.consecutive++
+
+	errKey := "unknown"
 	if errPtr != nil {
-		state.errors[*errPtr]++
-	} else {
-		state.errors["unknown"]++
+		errKey = *errPtr
 	}
+
+	state.errors[errKey]++
 
 	if state.consecutive == MinConsecutiveFailures && state.outageID == "" {
 		d.openOutage(ctx, scope, state)
