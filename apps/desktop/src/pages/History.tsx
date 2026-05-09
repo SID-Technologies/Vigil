@@ -48,6 +48,22 @@ import type { AggregatedRow, RawSample } from '../lib/ipc';
  * Granularity is auto-resolved by the sidecar: ≤2h raw, ≤7d 5min, >7d 1h.
  * The page transparently handles both raw and aggregated row shapes.
  */
+type MetricKey = 'p50' | 'p95' | 'p99' | 'max';
+
+const METRICS: { key: MetricKey; label: string; explain: string }[] = [
+  { key: 'p50', label: 'P50', explain: 'Median per bucket — the typical probe.' },
+  { key: 'p95', label: 'P95', explain: 'Slow tail — what the worst 5% of probes hit.' },
+  { key: 'p99', label: 'P99', explain: 'Top 1% — catches frequent spikes.' },
+  { key: 'max', label: 'Max', explain: 'Worst single probe per bucket — rare incidents.' },
+];
+
+const AGG_FIELD: Record<MetricKey, keyof AggregatedRow> = {
+  p50: 'rtt_p50_ms',
+  p95: 'rtt_p95_ms',
+  p99: 'rtt_p99_ms',
+  max: 'rtt_max_ms',
+};
+
 export function HistoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const allTargets = useAllProbeTargets();
@@ -58,6 +74,7 @@ export function HistoryPage() {
   // then sync to URL on change so back/forward navigation works.
   const [selected, setSelected] = useState<string[]>(() => parseTargets(searchParams.get('target')));
   const [range, setRange] = useState<TimeRange>(() => parseRangeFromUrl(searchParams) ?? defaultRange());
+  const [metric, setMetric] = useState<MetricKey>('p95');
   // Honor ?report=1 from the app menu's "New Report" command — opens the
   // modal automatically. The param is then stripped from the URL so a
   // back-button repeat doesn't re-trigger.
@@ -158,7 +175,24 @@ export function HistoryPage() {
           </YStack>
         </Card>
 
-        <Card title={`RTT — ${humanizeRange(rangeMs)}`}>
+        <Card
+          title={`RTT — ${humanizeRange(rangeMs)}`}
+          trailing={
+            samples.data && samples.data.granularity !== 'raw' ? (
+              <XStack gap="$1" alignItems="center">
+                {METRICS.map((m) => (
+                  <MetricChip
+                    key={m.key}
+                    label={m.label}
+                    explain={m.explain}
+                    active={metric === m.key}
+                    onPress={() => setMetric(m.key)}
+                  />
+                ))}
+              </XStack>
+            ) : null
+          }
+        >
           {samples.isLoading && !samples.data ? (
             <ChartSkeleton height={260} />
           ) : samples.isError ? (
@@ -178,6 +212,7 @@ export function HistoryPage() {
               getColor={getColor}
               fromMs={fromMs}
               toMs={toMs}
+              metric={metric}
             />
           )}
         </Card>
@@ -214,12 +249,14 @@ function HistoryChart({
   getColor,
   fromMs,
   toMs,
+  metric,
 }: {
   data: NonNullable<ReturnType<typeof useSamplesQuery>['data']>;
   targetsToChart: string[];
   getColor: (label: string) => string;
   fromMs: number;
   toMs: number;
+  metric: MetricKey;
 }) {
   const points = useMemo<PivotPoint[]>(() => {
     if (data.granularity === 'raw') {
@@ -234,12 +271,12 @@ function HistoryChart({
     // recharts skips when connectNulls is off.
     const interval = BUCKET_INTERVAL_MS[data.granularity];
     return fillBucketGaps(
-      pivotAggregated(data.rows, targetsToChart),
+      pivotAggregated(data.rows, targetsToChart, metric),
       fromMs,
       toMs,
       interval,
     );
-  }, [data, targetsToChart, fromMs, toMs]);
+  }, [data, targetsToChart, fromMs, toMs, metric]);
 
   // 7 ticks across whatever window the user picked — `generateTimeTicks`
   // rounds the spacing to whole minutes / hours / days so labels stay
@@ -314,15 +351,19 @@ function SummaryStats({
   targetsToChart: string[];
 }) {
   const stats = useMemo(() => {
-    const out = new Map<string, { count: number; success: number; rtts: number[] }>();
+    const out = new Map<string, { count: number; success: number; rtts: number[]; maxMs: number | null }>();
+    const empty = () => ({ count: 0, success: 0, rtts: [] as number[], maxMs: null as number | null });
     if (data.granularity === 'raw') {
       for (const r of data.rows as RawSample[]) {
         if (!targetsToChart.includes(r.target_label)) continue;
-        const e = out.get(r.target_label) ?? { count: 0, success: 0, rtts: [] };
+        const e = out.get(r.target_label) ?? empty();
         e.count++;
         if (r.success) {
           e.success++;
-          if (r.rtt_ms != null) e.rtts.push(r.rtt_ms);
+          if (r.rtt_ms != null) {
+            e.rtts.push(r.rtt_ms);
+            if (e.maxMs == null || r.rtt_ms > e.maxMs) e.maxMs = r.rtt_ms;
+          }
         }
         out.set(r.target_label, e);
       }
@@ -330,15 +371,19 @@ function SummaryStats({
       // Aggregated: counts and success_count come pre-rolled. We can't
       // reconstruct exact percentile distributions but we can compute a
       // sample-count-weighted mean of bucket p50s, which is close enough
-      // for a summary card.
+      // for a summary card. Max is exact — max-of-bucket-maxes is the
+      // true max across the whole window.
       for (const r of data.rows as AggregatedRow[]) {
         if (!targetsToChart.includes(r.target_label)) continue;
-        const e = out.get(r.target_label) ?? { count: 0, success: 0, rtts: [] };
+        const e = out.get(r.target_label) ?? empty();
         e.count += r.count;
         e.success += r.success_count;
         if (r.rtt_p50_ms != null && r.success_count > 0) {
           // Approximate: treat each success as one observation at the p50.
           for (let i = 0; i < r.success_count; i++) e.rtts.push(r.rtt_p50_ms);
+        }
+        if (r.rtt_max_ms != null && (e.maxMs == null || r.rtt_max_ms > e.maxMs)) {
+          e.maxMs = r.rtt_max_ms;
         }
         out.set(r.target_label, e);
       }
@@ -377,6 +422,12 @@ function SummaryStats({
             <InfoLabel
               label="P99"
               explain="99% of probes were faster. The worst 1% — usually transient spikes. High P99 means inconsistent network."
+            />
+          </YStack>
+          <YStack width={80}>
+            <InfoLabel
+              label="MAX"
+              explain="Single worst probe in this window. Surfaces rare incidents that even P99 misses on large samples."
             />
           </YStack>
           <YStack width={80}>
@@ -444,6 +495,11 @@ function SummaryStats({
                   </Text>
                 </YStack>
                 <YStack width={80}>
+                  <Text fontSize={12} color="$color11" className="vigil-num">
+                    {e.maxMs == null ? '—' : `${e.maxMs.toFixed(1)}ms`}
+                  </Text>
+                </YStack>
+                <YStack width={80}>
                   <Text fontSize={12} color="$color9" className="vigil-num">
                     {e.count.toLocaleString()}
                   </Text>
@@ -461,6 +517,44 @@ function StatHeaderCell({ children }: { children: React.ReactNode }) {
     <Text fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600" numberOfLines={1}>
       {children}
     </Text>
+  );
+}
+
+function MetricChip({
+  label,
+  explain,
+  active,
+  onPress,
+}: {
+  label: string;
+  explain: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <XStack
+      paddingHorizontal="$2"
+      paddingVertical="$1"
+      borderRadius="$1.5"
+      borderWidth={1}
+      borderColor={active ? '$accentBackground' : '$borderColor'}
+      backgroundColor={active ? '$accentBackground' : 'transparent'}
+      cursor="pointer"
+      hoverStyle={{ backgroundColor: active ? '$accentBackground' : '$color3' }}
+      pressStyle={{ opacity: 0.85 }}
+      animation="quick"
+      onPress={onPress}
+      title={explain}
+    >
+      <Text
+        fontSize={10}
+        fontWeight={active ? '600' : '500'}
+        color={active ? '$accentColor' : '$color11'}
+        letterSpacing={0.4}
+      >
+        {label}
+      </Text>
+    </XStack>
   );
 }
 
@@ -528,13 +622,16 @@ function pivotRaw(rows: RawSample[], targets: string[]): PivotPoint[] {
   return Array.from(byTs.values()).sort((a, b) => a.ts - b.ts);
 }
 
-function pivotAggregated(rows: AggregatedRow[], targets: string[]): PivotPoint[] {
+function pivotAggregated(rows: AggregatedRow[], targets: string[], metric: MetricKey): PivotPoint[] {
   const allowed = new Set(targets);
+  const field = AGG_FIELD[metric];
   const byTs = new Map<number, PivotPoint>();
   for (const r of rows) {
-    if (!allowed.has(r.target_label) || r.rtt_p50_ms == null) continue;
+    if (!allowed.has(r.target_label)) continue;
+    const v = r[field] as number | undefined;
+    if (v == null) continue;
     const existing = byTs.get(r.bucket_start_unix_ms) ?? { ts: r.bucket_start_unix_ms };
-    existing[r.target_label] = r.rtt_p50_ms;
+    existing[r.target_label] = v;
     byTs.set(r.bucket_start_unix_ms, existing);
   }
   return Array.from(byTs.values()).sort((a, b) => a.ts - b.ts);
