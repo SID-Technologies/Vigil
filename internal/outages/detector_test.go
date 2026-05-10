@@ -73,7 +73,7 @@ func TestDetector_UpdatesWhileOngoing(t *testing.T) {
 	}
 }
 
-func TestDetector_ClosesOnSuccess(t *testing.T) {
+func TestDetector_ClosesAfterRecoveryWindow(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -87,40 +87,168 @@ func TestDetector_ClosesOnSuccess(t *testing.T) {
 
 	assertOutageCount(ctx, t, client, "target:teams_tcp443", 1)
 
-	// First success closes it. end_ts is the success cycle's timestamp.
+	// First success enters recovery — outage must NOT close yet.
 	d.OnCycle(ctx, makeCycle(t, 4000, []probeOutcome{{label: "teams_tcp443", success: true, rtt: 25.5}}))
 
 	row := mustGetOnly(ctx, t, client, "target:teams_tcp443")
-	if row.EndTsUnixMs == nil {
-		t.Fatal("end_ts not set after close")
+	if row.EndTsUnixMs != nil {
+		t.Errorf("end_ts should still be nil during recovery hold-off, got %d", *row.EndTsUnixMs)
 	}
 
-	if *row.EndTsUnixMs != 4000 {
-		t.Errorf("end_ts = %d, want 4000", *row.EndTsUnixMs)
+	// Success past the hold-off window closes — end_ts is that cycle's ts.
+	closeTS := int64(4000) + outages.RecoveryHoldOffMs
+	d.OnCycle(ctx, makeCycle(t, closeTS, []probeOutcome{{label: "teams_tcp443", success: true, rtt: 24}}))
+
+	row = mustGetOnly(ctx, t, client, "target:teams_tcp443")
+	if row.EndTsUnixMs == nil {
+		t.Fatal("end_ts not set after recovery window elapsed")
+	}
+
+	if *row.EndTsUnixMs != closeTS {
+		t.Errorf("end_ts = %d, want %d", *row.EndTsUnixMs, closeTS)
 	}
 }
 
-func TestDetector_DoesNotReopenAfterClose(t *testing.T) {
+func TestDetector_RecoveryDampening_SingleSuccessKeepsOpen(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	client := db.SetupTestEntClientDB(t)
 	d := outages.New(client, nil)
 
-	// Open + close.
+	for i := 1; i <= 3; i++ {
+		d.OnCycle(ctx, makeCycle(t, int64(i)*1000, []probeOutcome{{label: "x", success: false, err: "timeout"}}))
+	}
+
+	// Five successes inside the recovery window — outage stays open.
+	for i := int64(1); i <= 5; i++ {
+		d.OnCycle(ctx, makeCycle(t, 3000+i*1000, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+	}
+
+	row := mustGetOnly(ctx, t, client, "target:x")
+	if row.EndTsUnixMs != nil {
+		t.Errorf("end_ts should still be nil during recovery hold-off, got %d", *row.EndTsUnixMs)
+	}
+}
+
+func TestDetector_RecoveryDampening_FailureCancelsRecovery(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	client := db.SetupTestEntClientDB(t)
+	d := outages.New(client, nil)
+
+	for i := 1; i <= 3; i++ {
+		d.OnCycle(ctx, makeCycle(t, int64(i)*1000, []probeOutcome{{label: "x", success: false, err: "timeout"}}))
+	}
+
+	// Recovery starts at 4000.
+	d.OnCycle(ctx, makeCycle(t, 4000, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+	d.OnCycle(ctx, makeCycle(t, 5000, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+
+	// Failure cancels in-progress recovery; row stays open and accumulates.
+	d.OnCycle(ctx, makeCycle(t, 6000, []probeOutcome{{label: "x", success: false, err: "host_unreachable"}}))
+
+	// New recovery window must elapse from the next success forward, not
+	// from the original 4000.
+	d.OnCycle(ctx, makeCycle(t, 7000, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+
+	almostCloseTS := int64(7000) + outages.RecoveryHoldOffMs - 1
+	d.OnCycle(ctx, makeCycle(t, almostCloseTS, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+
+	row := mustGetOnly(ctx, t, client, "target:x")
+	if row.EndTsUnixMs != nil {
+		t.Errorf("end_ts should still be nil — recovery was canceled, got %d", *row.EndTsUnixMs)
+	}
+
+	closeTS := int64(7000) + outages.RecoveryHoldOffMs
+	d.OnCycle(ctx, makeCycle(t, closeTS, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+
+	row = mustGetOnly(ctx, t, client, "target:x")
+	if row.EndTsUnixMs == nil {
+		t.Fatal("end_ts not set after second recovery window")
+	}
+
+	if *row.EndTsUnixMs != closeTS {
+		t.Errorf("end_ts = %d, want %d", *row.EndTsUnixMs, closeTS)
+	}
+}
+
+func TestDetector_CoalescesWithinWindow(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	client := db.SetupTestEntClientDB(t)
+	d := outages.New(client, nil)
+
+	// Open + close the first outage.
 	for i := 1; i <= 3; i++ {
 		d.OnCycle(ctx, makeCycle(t, int64(i)*1000, []probeOutcome{{label: "x", success: false, err: "timeout"}}))
 	}
 
 	d.OnCycle(ctx, makeCycle(t, 4000, []probeOutcome{{label: "x", success: true, rtt: 10}}))
 
-	// One isolated failure should not open a new outage.
-	d.OnCycle(ctx, makeCycle(t, 5000, []probeOutcome{{label: "x", success: false, err: "timeout"}}))
+	closeTS := int64(4000) + outages.RecoveryHoldOffMs
+	d.OnCycle(ctx, makeCycle(t, closeTS, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+
+	firstRow := mustGetOnly(ctx, t, client, "target:x")
+	firstID := firstRow.ID
+
+	if firstRow.EndTsUnixMs == nil {
+		t.Fatal("first outage should be closed before coalesce attempt")
+	}
+
+	// Three failures inside the coalesce window — reopens the prior row.
+	base := closeTS + 1000
+	for i := range int64(3) {
+		d.OnCycle(ctx, makeCycle(t, base+i*1000, []probeOutcome{{label: "x", success: false, err: "host_unreachable"}}))
+	}
+
 	assertOutageCount(ctx, t, client, "target:x", 1)
 
-	// But a fresh run of three failures starts a new outage row.
-	d.OnCycle(ctx, makeCycle(t, 6000, []probeOutcome{{label: "x", success: false, err: "timeout"}}))
-	d.OnCycle(ctx, makeCycle(t, 7000, []probeOutcome{{label: "x", success: false, err: "timeout"}}))
+	row := mustGetOnly(ctx, t, client, "target:x")
+	if row.ID != firstID {
+		t.Errorf("coalesced row should keep id %s, got %s", firstID, row.ID)
+	}
+
+	if row.EndTsUnixMs != nil {
+		t.Errorf("end_ts should be cleared on coalesce, got %d", *row.EndTsUnixMs)
+	}
+
+	if row.ConsecutiveFailures != 6 {
+		t.Errorf("consecutive_failures should accumulate (3+3=6), got %d", row.ConsecutiveFailures)
+	}
+
+	if row.Errors["timeout"] != 3 || row.Errors["host_unreachable"] != 3 {
+		t.Errorf("errors should merge: want timeout=3 host_unreachable=3, got %v", row.Errors)
+	}
+}
+
+func TestDetector_DoesNotCoalesceAfterWindow(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	client := db.SetupTestEntClientDB(t)
+	d := outages.New(client, nil)
+
+	// Open + close the first outage.
+	for i := 1; i <= 3; i++ {
+		d.OnCycle(ctx, makeCycle(t, int64(i)*1000, []probeOutcome{{label: "x", success: false, err: "timeout"}}))
+	}
+
+	d.OnCycle(ctx, makeCycle(t, 4000, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+
+	closeTS := int64(4000) + outages.RecoveryHoldOffMs
+	d.OnCycle(ctx, makeCycle(t, closeTS, []probeOutcome{{label: "x", success: true, rtt: 10}}))
+
+	assertOutageCount(ctx, t, client, "target:x", 1)
+
+	// Failure run starts past the coalesce window — must create a new row.
+	base := closeTS + outages.CoalesceWindowMs + 1000
+	for i := range int64(3) {
+		d.OnCycle(ctx, makeCycle(t, base+i*1000, []probeOutcome{{label: "x", success: false, err: "timeout"}}))
+	}
+
 	assertOutageCount(ctx, t, client, "target:x", 2)
 }
 

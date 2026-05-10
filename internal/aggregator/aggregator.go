@@ -46,10 +46,12 @@ func New(client *ent.Client) *Aggregator {
 // Run blocks until ctx is canceled. Runs once on startup so a cold-booted
 // dashboard has data immediately.
 func (a *Aggregator) Run(ctx context.Context) {
-	runloop.Every(ctx, "aggregator", a.Interval, a.runOnce)
+	runloop.Every(ctx, "aggregator", a.Interval, a.RunOnce)
 }
 
-func (a *Aggregator) runOnce(ctx context.Context) {
+// RunOnce drives a single aggregation pass across all tiers. Exposed for
+// tests; in production it's invoked by Run on each ticker tick.
+func (a *Aggregator) RunOnce(ctx context.Context) {
 	now := time.Now().UnixMilli()
 
 	err := a.run1min(ctx, now)
