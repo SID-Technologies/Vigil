@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CaretDown, CaretRight } from '@phosphor-icons/react';
 import { XStack, YStack, Text, Separator } from 'tamagui';
 
@@ -8,6 +8,7 @@ import { RowSkeleton } from '../components/Skeleton';
 import { TimeRangePicker, defaultRange, type TimeRange } from '../components/TimeRangePicker';
 import { useOutages, type Outage } from '../hooks/useOutages';
 import { useTargets } from '../hooks/useTargets';
+import { groupOutages, type OutageGroup } from '../lib/outageGrouping';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -42,14 +43,19 @@ export function OutagesPage() {
   });
 
   const all = outages.data ?? [];
-  const open = all.filter((o) => o.end_ts_unix_ms == null);
-  const resolved = all.filter((o) => o.end_ts_unix_ms != null);
 
-  const toggleExpand = (id: string) => {
+  // Group per-probe outage rows into service-level incidents so outlook_icmp
+  // + outlook_tcp443 read as one outage instead of two. Source data stays
+  // unchanged — reports and CSVs still get per-probe granularity.
+  const allGroups = useMemo(() => groupOutages(all), [all]);
+  const openGroups = allGroups.filter((g) => g.endMs == null);
+  const resolvedGroups = allGroups.filter((g) => g.endMs != null);
+
+  const toggleExpand = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -118,34 +124,34 @@ export function OutagesPage() {
           </Card>
         ) : (
           <>
-            {open.length > 0 && (
+            {openGroups.length > 0 && (
               <Card title="Ongoing">
                 <YStack gap="$1">
-                  {open.map((o) => (
-                    <OutageRow
-                      key={o.id}
-                      outage={o}
-                      expanded={expanded.has(o.id)}
-                      onToggle={() => toggleExpand(o.id)}
+                  {openGroups.map((g) => (
+                    <ServiceOutageRow
+                      key={g.key}
+                      group={g}
+                      expanded={expanded.has(g.key)}
+                      onToggle={() => toggleExpand(g.key)}
                       live
                     />
                   ))}
                 </YStack>
               </Card>
             )}
-            <Card title={`Resolved — ${resolved.length}`}>
+            <Card title={`Resolved — ${resolvedGroups.length}`}>
               <YStack gap="$1">
-                {resolved.length === 0 ? (
+                {resolvedGroups.length === 0 ? (
                   <Text fontSize={11} color="$color8" padding="$2">
                     No resolved outages in this window.
                   </Text>
                 ) : (
-                  resolved.map((o) => (
-                    <OutageRow
-                      key={o.id}
-                      outage={o}
-                      expanded={expanded.has(o.id)}
-                      onToggle={() => toggleExpand(o.id)}
+                  resolvedGroups.map((g) => (
+                    <ServiceOutageRow
+                      key={g.key}
+                      group={g}
+                      expanded={expanded.has(g.key)}
+                      onToggle={() => toggleExpand(g.key)}
                     />
                   ))
                 )}
@@ -190,23 +196,27 @@ function ScopeChip({
   );
 }
 
-function OutageRow({
-  outage,
+function ServiceOutageRow({
+  group,
   expanded,
   onToggle,
   live,
 }: {
-  outage: Outage;
+  group: OutageGroup;
   expanded: boolean;
   onToggle: () => void;
   live?: boolean;
 }) {
-  const scopeLabel = outage.scope === 'network' ? 'Network' : outage.scope.replace('target:', '');
-  const start = new Date(outage.start_ts_unix_ms);
-  const end = outage.end_ts_unix_ms ? new Date(outage.end_ts_unix_ms) : null;
+  const start = new Date(group.startMs);
+  const endMs = group.endMs;
+  const end = endMs != null ? new Date(endMs) : null;
   const durationSec = end
     ? Math.round((end.getTime() - start.getTime()) / 1000)
-    : Math.round((Date.now() - start.getTime()) / 1000);
+    : Math.round((Date.now() - group.startMs) / 1000);
+
+  const headline = group.kind === 'network' ? 'Network' : group.service;
+  const probeCount = group.probeLabels.length;
+  const totalFailures = group.members.reduce((sum, m) => sum + m.consecutive_failures, 0);
 
   return (
     <YStack
@@ -233,11 +243,26 @@ function OutageRow({
           borderRadius={999}
           backgroundColor={live ? '$red10' : '$color8'}
         />
-        <Text fontSize={13} color="$color12" fontWeight={live ? '600' : '500'} flex={1}>
-          {scopeLabel}
+        <Text fontSize={13} color="$color12" fontWeight={live ? '600' : '500'}>
+          {headline}
         </Text>
+        {probeCount > 1 && group.kind !== 'network' ? (
+          <XStack
+            paddingHorizontal="$1.5"
+            paddingVertical="$0.5"
+            borderRadius="$1"
+            backgroundColor="$color2"
+            borderWidth={1}
+            borderColor="$borderColor"
+          >
+            <Text fontSize={10} color="$color11" fontWeight="600">
+              {probeCount} probes
+            </Text>
+          </XStack>
+        ) : null}
+        <YStack flex={1} />
         <Text fontSize={11} color="$color9" className="vigil-num">
-          {outage.consecutive_failures} consecutive failures
+          {totalFailures} consecutive failures
         </Text>
         <Text fontSize={11} color="$color11" fontWeight="600" className="vigil-num">
           {fmtDuration(durationSec)}
@@ -270,37 +295,89 @@ function OutageRow({
             />
             <DetailField label="Duration" value={fmtDurationLong(durationSec)} />
           </XStack>
-          {outage.errors && Object.keys(outage.errors).length > 0 ? (
+          <YStack gap="$1.5">
+            <Text fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
+              {group.kind === 'network' ? 'NETWORK PROBE' : 'CONTRIBUTING PROBES'}
+            </Text>
             <YStack gap="$1.5">
-              <Text fontSize={10} color="$color8" letterSpacing={0.5} fontWeight="600">
-                ERROR BREAKDOWN
-              </Text>
-              <XStack gap="$1.5" flexWrap="wrap">
-                {Object.entries(outage.errors)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([code, count]) => (
-                    <XStack
-                      key={code}
-                      paddingHorizontal="$2"
-                      paddingVertical="$1"
-                      borderRadius="$1"
-                      backgroundColor="$color2"
-                      borderWidth={1}
-                      borderColor="$borderColor"
-                      gap="$1.5"
-                    >
-                      <Text fontSize={11} color="$color11" fontFamily="$body">
-                        {code}
-                      </Text>
-                      <Text fontSize={11} color="$color8" className="vigil-num">
-                        ×{count}
-                      </Text>
-                    </XStack>
-                  ))}
-              </XStack>
+              {group.members.map((m) => (
+                <MemberDetail key={m.id} outage={m} />
+              ))}
             </YStack>
-          ) : null}
+          </YStack>
         </YStack>
+      ) : null}
+    </YStack>
+  );
+}
+
+function MemberDetail({ outage }: { outage: Outage }) {
+  const probeLabel = outage.scope === 'network' ? 'network' : outage.scope.replace('target:', '');
+  const start = new Date(outage.start_ts_unix_ms);
+  const end = outage.end_ts_unix_ms ? new Date(outage.end_ts_unix_ms) : null;
+  const durationSec = end
+    ? Math.round((end.getTime() - start.getTime()) / 1000)
+    : Math.round((Date.now() - start.getTime()) / 1000);
+  const isOngoing = end == null;
+  const errorEntries =
+    outage.errors != null ? Object.entries(outage.errors).sort((a, b) => b[1] - a[1]) : [];
+
+  return (
+    <YStack
+      borderRadius="$1.5"
+      borderWidth={1}
+      borderColor="$borderColor"
+      backgroundColor="$color2"
+      padding="$2"
+      gap="$1.5"
+    >
+      <XStack alignItems="center" gap="$2" flexWrap="wrap">
+        <YStack
+          width={6}
+          height={6}
+          borderRadius={999}
+          backgroundColor={isOngoing ? '$red10' : '$color8'}
+        />
+        <Text fontSize={12} color="$color12" fontWeight="500" flex={1} minWidth={140}>
+          {probeLabel}
+        </Text>
+        <Text fontSize={11} color="$color9" className="vigil-num">
+          {outage.consecutive_failures} fails
+        </Text>
+        <Text fontSize={11} color="$color11" className="vigil-num">
+          {fmtDuration(durationSec)}
+        </Text>
+        <Text fontSize={11} color="$color8" className="vigil-num">
+          {isOngoing ? 'ongoing' : `ended ${end!.toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}`}
+        </Text>
+      </XStack>
+      {errorEntries.length > 0 ? (
+        <XStack gap="$1" flexWrap="wrap" paddingLeft="$3">
+          {errorEntries.map(([code, count]) => (
+            <XStack
+              key={code}
+              paddingHorizontal="$1.5"
+              paddingVertical="$0.5"
+              borderRadius="$1"
+              backgroundColor="$color3"
+              borderWidth={1}
+              borderColor="$borderColor"
+              gap="$1"
+            >
+              <Text fontSize={10} color="$color11">
+                {code}
+              </Text>
+              <Text fontSize={10} color="$color8" className="vigil-num">
+                ×{count}
+              </Text>
+            </XStack>
+          ))}
+        </XStack>
       ) : null}
     </YStack>
   );
