@@ -49,12 +49,18 @@ import type { AggregatedRow, RawSample } from '../lib/ipc';
  * The page transparently handles both raw and aggregated row shapes.
  */
 type MetricKey = 'p50' | 'p95' | 'p99' | 'max';
+type YScale = 'log' | 'linear';
 
 const METRICS: { key: MetricKey; label: string; explain: string }[] = [
   { key: 'p50', label: 'P50', explain: 'Median per bucket — the typical probe.' },
   { key: 'p95', label: 'P95', explain: 'Slow tail — what the worst 5% of probes hit.' },
   { key: 'p99', label: 'P99', explain: 'Top 1% — catches frequent spikes.' },
   { key: 'max', label: 'Max', explain: 'Worst single probe per bucket — rare incidents.' },
+];
+
+const SCALES: { key: YScale; label: string; explain: string }[] = [
+  { key: 'log', label: 'Log', explain: 'Log Y axis. Keeps 1ms-and-100ms readable while still showing >1000ms spikes — best for latency.' },
+  { key: 'linear', label: 'Linear', explain: 'Linear Y axis. Absolute spacing, but big spikes flatten everything else.' },
 ];
 
 const AGG_FIELD: Record<MetricKey, keyof AggregatedRow> = {
@@ -75,6 +81,7 @@ export function HistoryPage() {
   const [selected, setSelected] = useState<string[]>(() => parseTargets(searchParams.get('target')));
   const [range, setRange] = useState<TimeRange>(() => parseRangeFromUrl(searchParams) ?? defaultRange());
   const [metric, setMetric] = useState<MetricKey>('p95');
+  const [yScale, setYScale] = useState<YScale>('log');
   // Honor ?report=1 from the app menu's "New Report" command — opens the
   // modal automatically. The param is then stripped from the URL so a
   // back-button repeat doesn't re-trigger.
@@ -176,21 +183,34 @@ export function HistoryPage() {
         </Card>
 
         <Card
-          title={`RTT — ${humanizeRange(rangeMs)}`}
+          title={`RTT (ms) — ${humanizeRange(rangeMs)}`}
           trailing={
-            samples.data && samples.data.granularity !== 'raw' ? (
+            <XStack gap="$2" alignItems="center">
               <XStack gap="$1" alignItems="center">
-                {METRICS.map((m) => (
+                {SCALES.map((s) => (
                   <MetricChip
-                    key={m.key}
-                    label={m.label}
-                    explain={m.explain}
-                    active={metric === m.key}
-                    onPress={() => setMetric(m.key)}
+                    key={s.key}
+                    label={s.label}
+                    explain={s.explain}
+                    active={yScale === s.key}
+                    onPress={() => setYScale(s.key)}
                   />
                 ))}
               </XStack>
-            ) : null
+              {samples.data && samples.data.granularity !== 'raw' ? (
+                <XStack gap="$1" alignItems="center">
+                  {METRICS.map((m) => (
+                    <MetricChip
+                      key={m.key}
+                      label={m.label}
+                      explain={m.explain}
+                      active={metric === m.key}
+                      onPress={() => setMetric(m.key)}
+                    />
+                  ))}
+                </XStack>
+              ) : null}
+            </XStack>
           }
         >
           {samples.isLoading && !samples.data ? (
@@ -213,6 +233,7 @@ export function HistoryPage() {
               fromMs={fromMs}
               toMs={toMs}
               metric={metric}
+              yScale={yScale}
             />
           )}
         </Card>
@@ -250,6 +271,7 @@ function HistoryChart({
   fromMs,
   toMs,
   metric,
+  yScale,
 }: {
   data: NonNullable<ReturnType<typeof useSamplesQuery>['data']>;
   targetsToChart: string[];
@@ -257,6 +279,7 @@ function HistoryChart({
   fromMs: number;
   toMs: number;
   metric: MetricKey;
+  yScale: YScale;
 }) {
   const points = useMemo<PivotPoint[]>(() => {
     if (data.granularity === 'raw') {
@@ -283,10 +306,15 @@ function HistoryChart({
   // legible.
   const xTicks = useMemo(() => generateTimeTicks(fromMs, toMs, 7), [fromMs, toMs]);
 
+  // Log domain must avoid zero. RTTs are typically >=1ms; clamp the floor
+  // so the axis renders cleanly even if a sub-1ms value sneaks through.
+  const yDomain: [number | 'auto', number | 'auto'] =
+    yScale === 'log' ? [1, 'auto'] : [0, 'auto'];
+
   return (
     <YStack height={320}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+        <LineChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
           <CartesianGrid stroke="var(--borderColor)" strokeDasharray="3 3" />
           <XAxis
             dataKey="ts"
@@ -301,8 +329,11 @@ function HistoryChart({
           <YAxis
             tick={{ fontSize: 10, fill: 'var(--color9)' }}
             stroke="var(--borderColor)"
-            label={{ value: 'ms', angle: -90, position: 'insideLeft', fill: 'var(--color9)', fontSize: 10, offset: 16 }}
-            width={42}
+            width={52}
+            scale={yScale}
+            domain={yDomain}
+            allowDataOverflow={false}
+            tickFormatter={fmtYTick}
           />
           <Tooltip
             content={<ChartTooltip formatLabel={fmtTimeLong} unit="ms" />}
@@ -324,6 +355,15 @@ function HistoryChart({
       </ResponsiveContainer>
     </YStack>
   );
+}
+
+// Short numeric tick — drops trailing zeros (e.g., "1000" not "1000.00") and
+// keeps decimal-friendly values readable on log axes.
+function fmtYTick(v: number): string {
+  if (v >= 1000) return `${Math.round(v)}`;
+  if (v >= 10) return `${Math.round(v)}`;
+  if (v >= 1) return v.toFixed(1).replace(/\.0$/, '');
+  return v.toFixed(2);
 }
 
 function ChartEmpty({ headline, detail }: { headline: string; detail: string }) {
