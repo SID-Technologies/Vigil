@@ -44,5 +44,8 @@ func (AppConfig) Fields() []ent.Field {
 			Comment("Days to retain 5-minute aggregations"),
 		field.Bool("wifi_sample_enabled").
 			Default(true),
+		field.Bool("router_probe_enabled").
+			Default(true).
+			Comment("Whether to probe the auto-detected default gateway each cycle"),
 	}
 }

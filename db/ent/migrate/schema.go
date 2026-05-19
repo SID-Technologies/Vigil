@@ -18,6 +18,7 @@ var (
 		{Name: "retention_1min_days", Type: field.TypeInt, Default: 14},
 		{Name: "retention_5min_days", Type: field.TypeInt, Default: 90},
 		{Name: "wifi_sample_enabled", Type: field.TypeBool, Default: true},
+		{Name: "router_probe_enabled", Type: field.TypeBool, Default: true},
 	}
 	// AppConfigsTable holds the schema information for the "app_configs" table.
 	AppConfigsTable = &schema.Table{

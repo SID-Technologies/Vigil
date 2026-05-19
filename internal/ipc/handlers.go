@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/sid-technologies/vigil/internal/netinfo"
 	"github.com/sid-technologies/vigil/pkg/buildinfo"
 )
 
 // RegisterCoreHandlers wires methods that don't depend on storage.
 func RegisterCoreHandlers(s *Server) {
 	s.Register("health.check", bind(handleHealthCheck))
+	s.Register("system.gateway", bind(handleSystemGateway))
 }
 
 // bind adapts a typed handler — fn(ctx, P) (R, *Error) — to the Server's
@@ -43,4 +45,16 @@ func handleHealthCheck(_ context.Context, _ struct{}) (HealthCheckResult, *Error
 		Version: buildinfo.Version(),
 		Commit:  commit,
 	}, nil
+}
+
+// GatewayInfo is the payload returned by system.gateway.
+type GatewayInfo struct {
+	IP       string `json:"ip,omitempty"`
+	Detected bool   `json:"detected"`
+}
+
+func handleSystemGateway(_ context.Context, _ struct{}) (GatewayInfo, *Error) {
+	ip, ok := netinfo.DetectDefaultGateway()
+
+	return GatewayInfo{IP: ip, Detected: ok}, nil
 }

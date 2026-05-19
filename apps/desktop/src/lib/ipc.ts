@@ -179,12 +179,22 @@ export interface AppConfig {
   retention_1min_days: number;
   retention_5min_days: number;
   wifi_sample_enabled: boolean;
+  router_probe_enabled: boolean;
 }
 
 export const configGet = () => ipcCall<AppConfig>('config.get');
 
 export const configUpdate = (patch: Partial<AppConfig>) =>
   ipcCall<AppConfig>('config.update', patch);
+
+// ---------- System / network introspection ----------
+
+export interface GatewayInfo {
+  ip?: string;
+  detected: boolean;
+}
+
+export const systemGateway = () => ipcCall<GatewayInfo>('system.gateway');
 
 // ---------- Reports ----------
 

@@ -25,6 +25,8 @@ const (
 	FieldRetention5minDays = "retention_5min_days"
 	// FieldWifiSampleEnabled holds the string denoting the wifi_sample_enabled field in the database.
 	FieldWifiSampleEnabled = "wifi_sample_enabled"
+	// FieldRouterProbeEnabled holds the string denoting the router_probe_enabled field in the database.
+	FieldRouterProbeEnabled = "router_probe_enabled"
 	// Table holds the table name of the appconfig in the database.
 	Table = "app_configs"
 )
@@ -39,6 +41,7 @@ var Columns = []string{
 	FieldRetention1minDays,
 	FieldRetention5minDays,
 	FieldWifiSampleEnabled,
+	FieldRouterProbeEnabled,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -66,6 +69,8 @@ var (
 	DefaultRetention5minDays int
 	// DefaultWifiSampleEnabled holds the default value on creation for the "wifi_sample_enabled" field.
 	DefaultWifiSampleEnabled bool
+	// DefaultRouterProbeEnabled holds the default value on creation for the "router_probe_enabled" field.
+	DefaultRouterProbeEnabled bool
 )
 
 // OrderOption defines the ordering options for the AppConfig queries.
@@ -109,4 +114,9 @@ func ByRetention5minDays(opts ...sql.OrderTermOption) OrderOption {
 // ByWifiSampleEnabled orders the results by the wifi_sample_enabled field.
 func ByWifiSampleEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWifiSampleEnabled, opts...).ToFunc()
+}
+
+// ByRouterProbeEnabled orders the results by the router_probe_enabled field.
+func ByRouterProbeEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRouterProbeEnabled, opts...).ToFunc()
 }
