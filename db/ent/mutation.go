@@ -60,6 +60,7 @@ type AppConfigMutation struct {
 	retention_5min_days    *int
 	addretention_5min_days *int
 	wifi_sample_enabled    *bool
+	router_probe_enabled   *bool
 	clearedFields          map[string]struct{}
 	done                   bool
 	oldValue               func(context.Context) (*AppConfig, error)
@@ -542,6 +543,42 @@ func (m *AppConfigMutation) ResetWifiSampleEnabled() {
 	m.wifi_sample_enabled = nil
 }
 
+// SetRouterProbeEnabled sets the "router_probe_enabled" field.
+func (m *AppConfigMutation) SetRouterProbeEnabled(b bool) {
+	m.router_probe_enabled = &b
+}
+
+// RouterProbeEnabled returns the value of the "router_probe_enabled" field in the mutation.
+func (m *AppConfigMutation) RouterProbeEnabled() (r bool, exists bool) {
+	v := m.router_probe_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRouterProbeEnabled returns the old "router_probe_enabled" field's value of the AppConfig entity.
+// If the AppConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AppConfigMutation) OldRouterProbeEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRouterProbeEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRouterProbeEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRouterProbeEnabled: %w", err)
+	}
+	return oldValue.RouterProbeEnabled, nil
+}
+
+// ResetRouterProbeEnabled resets all changes to the "router_probe_enabled" field.
+func (m *AppConfigMutation) ResetRouterProbeEnabled() {
+	m.router_probe_enabled = nil
+}
+
 // Where appends a list predicates to the AppConfigMutation builder.
 func (m *AppConfigMutation) Where(ps ...predicate.AppConfig) {
 	m.predicates = append(m.predicates, ps...)
@@ -576,7 +613,7 @@ func (m *AppConfigMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AppConfigMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.ping_interval_sec != nil {
 		fields = append(fields, appconfig.FieldPingIntervalSec)
 	}
@@ -597,6 +634,9 @@ func (m *AppConfigMutation) Fields() []string {
 	}
 	if m.wifi_sample_enabled != nil {
 		fields = append(fields, appconfig.FieldWifiSampleEnabled)
+	}
+	if m.router_probe_enabled != nil {
+		fields = append(fields, appconfig.FieldRouterProbeEnabled)
 	}
 	return fields
 }
@@ -620,6 +660,8 @@ func (m *AppConfigMutation) Field(name string) (ent.Value, bool) {
 		return m.Retention5minDays()
 	case appconfig.FieldWifiSampleEnabled:
 		return m.WifiSampleEnabled()
+	case appconfig.FieldRouterProbeEnabled:
+		return m.RouterProbeEnabled()
 	}
 	return nil, false
 }
@@ -643,6 +685,8 @@ func (m *AppConfigMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldRetention5minDays(ctx)
 	case appconfig.FieldWifiSampleEnabled:
 		return m.OldWifiSampleEnabled(ctx)
+	case appconfig.FieldRouterProbeEnabled:
+		return m.OldRouterProbeEnabled(ctx)
 	}
 	return nil, fmt.Errorf("unknown AppConfig field %s", name)
 }
@@ -700,6 +744,13 @@ func (m *AppConfigMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWifiSampleEnabled(v)
+		return nil
+	case appconfig.FieldRouterProbeEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRouterProbeEnabled(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AppConfig field %s", name)
@@ -845,6 +896,9 @@ func (m *AppConfigMutation) ResetField(name string) error {
 		return nil
 	case appconfig.FieldWifiSampleEnabled:
 		m.ResetWifiSampleEnabled()
+		return nil
+	case appconfig.FieldRouterProbeEnabled:
+		m.ResetRouterProbeEnabled()
 		return nil
 	}
 	return fmt.Errorf("unknown AppConfig field %s", name)

@@ -31,7 +31,9 @@ type AppConfig struct {
 	Retention5minDays int `json:"retention_5min_days,omitempty"`
 	// WifiSampleEnabled holds the value of the "wifi_sample_enabled" field.
 	WifiSampleEnabled bool `json:"wifi_sample_enabled,omitempty"`
-	selectValues      sql.SelectValues
+	// Whether to probe the auto-detected default gateway each cycle
+	RouterProbeEnabled bool `json:"router_probe_enabled,omitempty"`
+	selectValues       sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -39,7 +41,7 @@ func (*AppConfig) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case appconfig.FieldWifiSampleEnabled:
+		case appconfig.FieldWifiSampleEnabled, appconfig.FieldRouterProbeEnabled:
 			values[i] = new(sql.NullBool)
 		case appconfig.FieldPingIntervalSec:
 			values[i] = new(sql.NullFloat64)
@@ -108,6 +110,12 @@ func (_m *AppConfig) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.WifiSampleEnabled = value.Bool
 			}
+		case appconfig.FieldRouterProbeEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field router_probe_enabled", values[i])
+			} else if value.Valid {
+				_m.RouterProbeEnabled = value.Bool
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -164,6 +172,9 @@ func (_m *AppConfig) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("wifi_sample_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WifiSampleEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("router_probe_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RouterProbeEnabled))
 	builder.WriteByte(')')
 	return builder.String()
 }

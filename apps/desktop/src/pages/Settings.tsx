@@ -10,6 +10,7 @@ import { Skeleton } from '../components/Skeleton';
 import { Toggle } from '../components/Toggle';
 import { resetWelcomeTour } from '../components/WelcomeTour';
 import { useAppConfig, useUpdateConfig } from '../hooks/useAppConfig';
+import { useGatewayInfo } from '../hooks/useGatewayInfo';
 import {
   CONFIG_BOUNDS,
   validateField,
@@ -50,6 +51,7 @@ function seedRaw(cfg: AppConfig): RawNumeric {
 export function SettingsPage() {
   const cfg = useAppConfig();
   const update = useUpdateConfig();
+  const gateway = useGatewayInfo();
 
   const [draft, setDraft] = useState<AppConfig | null>(null);
   const [raw, setRaw] = useState<RawNumeric | null>(null);
@@ -340,6 +342,32 @@ export function SettingsPage() {
                 On macOS, runs `system_profiler SPAirPortDataType` once per minute. On Linux,
                 netlink. On Windows, `netsh wlan`. Disable if you're on wired Ethernet only.
                 Applies on the next flush.
+              </Text>
+            </YStack>
+          </XStack>
+        </Section>
+
+        <Section title="Router probe">
+          <XStack alignItems="center" gap="$3">
+            <Toggle
+              checked={draft.router_probe_enabled}
+              onCheckedChange={(v) => setBool('router_probe_enabled', v)}
+              size="md"
+            />
+            <YStack flex={1} gap="$0.5">
+              <Text fontSize={13} color="$color12">
+                Probe the default gateway every cycle
+              </Text>
+              <Text fontSize={11} color="$color9">
+                {gateway.data?.detected && gateway.data.ip
+                  ? `Vigil pings ${gateway.data.ip} — the default gateway your OS routes through.`
+                  : 'No default gateway detected yet. Toggle has no effect until one shows up.'}
+              </Text>
+              <Text fontSize={11} color="$color9">
+                Many ISP-issued routers silently drop ICMP echo on the LAN side as a baked-in
+                config — your internet still works, the box just won't respond to ping. Disable
+                this if your router is one of them so the Outages page doesn't fill up with a
+                permanent "router unreachable" record.
               </Text>
             </YStack>
           </XStack>

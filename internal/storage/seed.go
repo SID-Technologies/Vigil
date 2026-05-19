@@ -86,6 +86,7 @@ func (c *SeedClient) AppConfig(ctx context.Context) error {
 		SetRetention1minDays(constants.DefaultRetention1MinDays).
 		SetRetention5minDays(constants.DefaultRetention5MinDays).
 		SetWifiSampleEnabled(true).
+		SetRouterProbeEnabled(true).
 		Save(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to seed app config")

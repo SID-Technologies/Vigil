@@ -49,6 +49,10 @@ func init() {
 	appconfigDescWifiSampleEnabled := appconfigFields[7].Descriptor()
 	// appconfig.DefaultWifiSampleEnabled holds the default value on creation for the wifi_sample_enabled field.
 	appconfig.DefaultWifiSampleEnabled = appconfigDescWifiSampleEnabled.Default.(bool)
+	// appconfigDescRouterProbeEnabled is the schema descriptor for router_probe_enabled field.
+	appconfigDescRouterProbeEnabled := appconfigFields[8].Descriptor()
+	// appconfig.DefaultRouterProbeEnabled holds the default value on creation for the router_probe_enabled field.
+	appconfig.DefaultRouterProbeEnabled = appconfigDescRouterProbeEnabled.Default.(bool)
 	outageFields := schema.Outage{}.Fields()
 	_ = outageFields
 	// outageDescScope is the schema descriptor for scope field.

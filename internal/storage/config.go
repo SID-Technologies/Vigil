@@ -9,13 +9,14 @@ import (
 
 // AppConfig is the JSON view of the singleton app_config row.
 type AppConfig struct {
-	PingIntervalSec   float64 `json:"ping_interval_sec"`
-	FlushIntervalSec  int     `json:"flush_interval_sec"`
-	PingTimeoutMs     int     `json:"ping_timeout_ms"`
-	RetentionRawDays  int     `json:"retention_raw_days"`
-	Retention1minDays int     `json:"retention_1min_days"`
-	Retention5minDays int     `json:"retention_5min_days"`
-	WifiSampleEnabled bool    `json:"wifi_sample_enabled"`
+	PingIntervalSec    float64 `json:"ping_interval_sec"`
+	FlushIntervalSec   int     `json:"flush_interval_sec"`
+	PingTimeoutMs      int     `json:"ping_timeout_ms"`
+	RetentionRawDays   int     `json:"retention_raw_days"`
+	Retention1minDays  int     `json:"retention_1min_days"`
+	Retention5minDays  int     `json:"retention_5min_days"`
+	WifiSampleEnabled  bool    `json:"wifi_sample_enabled"`
+	RouterProbeEnabled bool    `json:"router_probe_enabled"`
 }
 
 // AppConfigSingletonID — app_config holds exactly one row, enforced in code.
@@ -23,13 +24,14 @@ const AppConfigSingletonID = 1
 
 // AppConfigPatch — pointer fields distinguish "unset" from intentional zero.
 type AppConfigPatch struct {
-	PingIntervalSec   *float64 `json:"ping_interval_sec,omitempty"`
-	FlushIntervalSec  *int     `json:"flush_interval_sec,omitempty"`
-	PingTimeoutMs     *int     `json:"ping_timeout_ms,omitempty"`
-	RetentionRawDays  *int     `json:"retention_raw_days,omitempty"`
-	Retention1minDays *int     `json:"retention_1min_days,omitempty"`
-	Retention5minDays *int     `json:"retention_5min_days,omitempty"`
-	WifiSampleEnabled *bool    `json:"wifi_sample_enabled,omitempty"`
+	PingIntervalSec    *float64 `json:"ping_interval_sec,omitempty"`
+	FlushIntervalSec   *int     `json:"flush_interval_sec,omitempty"`
+	PingTimeoutMs      *int     `json:"ping_timeout_ms,omitempty"`
+	RetentionRawDays   *int     `json:"retention_raw_days,omitempty"`
+	Retention1minDays  *int     `json:"retention_1min_days,omitempty"`
+	Retention5minDays  *int     `json:"retention_5min_days,omitempty"`
+	WifiSampleEnabled  *bool    `json:"wifi_sample_enabled,omitempty"`
+	RouterProbeEnabled *bool    `json:"router_probe_enabled,omitempty"`
 }
 
 // ConfigClient owns the singleton app_config row.
@@ -50,13 +52,14 @@ func (c *ConfigClient) Get(ctx context.Context) (AppConfig, error) {
 	}
 
 	return AppConfig{
-		PingIntervalSec:   row.PingIntervalSec,
-		FlushIntervalSec:  row.FlushIntervalSec,
-		PingTimeoutMs:     row.PingTimeoutMs,
-		RetentionRawDays:  row.RetentionRawDays,
-		Retention1minDays: row.Retention1minDays,
-		Retention5minDays: row.Retention5minDays,
-		WifiSampleEnabled: row.WifiSampleEnabled,
+		PingIntervalSec:    row.PingIntervalSec,
+		FlushIntervalSec:   row.FlushIntervalSec,
+		PingTimeoutMs:      row.PingTimeoutMs,
+		RetentionRawDays:   row.RetentionRawDays,
+		Retention1minDays:  row.Retention1minDays,
+		Retention5minDays:  row.Retention5minDays,
+		WifiSampleEnabled:  row.WifiSampleEnabled,
+		RouterProbeEnabled: row.RouterProbeEnabled,
 	}, nil
 }
 
@@ -89,6 +92,10 @@ func (c *ConfigClient) Update(ctx context.Context, patch AppConfigPatch) (AppCon
 
 	if patch.WifiSampleEnabled != nil {
 		upd.SetWifiSampleEnabled(*patch.WifiSampleEnabled)
+	}
+
+	if patch.RouterProbeEnabled != nil {
+		upd.SetRouterProbeEnabled(*patch.RouterProbeEnabled)
 	}
 
 	_, err := upd.Save(ctx)

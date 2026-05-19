@@ -167,6 +167,20 @@ func (_u *AppConfigUpdate) SetNillableWifiSampleEnabled(v *bool) *AppConfigUpdat
 	return _u
 }
 
+// SetRouterProbeEnabled sets the "router_probe_enabled" field.
+func (_u *AppConfigUpdate) SetRouterProbeEnabled(v bool) *AppConfigUpdate {
+	_u.mutation.SetRouterProbeEnabled(v)
+	return _u
+}
+
+// SetNillableRouterProbeEnabled sets the "router_probe_enabled" field if the given value is not nil.
+func (_u *AppConfigUpdate) SetNillableRouterProbeEnabled(v *bool) *AppConfigUpdate {
+	if v != nil {
+		_u.SetRouterProbeEnabled(*v)
+	}
+	return _u
+}
+
 // Mutation returns the AppConfigMutation object of the builder.
 func (_u *AppConfigUpdate) Mutation() *AppConfigMutation {
 	return _u.mutation
@@ -246,6 +260,9 @@ func (_u *AppConfigUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.WifiSampleEnabled(); ok {
 		_spec.SetField(appconfig.FieldWifiSampleEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RouterProbeEnabled(); ok {
+		_spec.SetField(appconfig.FieldRouterProbeEnabled, field.TypeBool, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -407,6 +424,20 @@ func (_u *AppConfigUpdateOne) SetNillableWifiSampleEnabled(v *bool) *AppConfigUp
 	return _u
 }
 
+// SetRouterProbeEnabled sets the "router_probe_enabled" field.
+func (_u *AppConfigUpdateOne) SetRouterProbeEnabled(v bool) *AppConfigUpdateOne {
+	_u.mutation.SetRouterProbeEnabled(v)
+	return _u
+}
+
+// SetNillableRouterProbeEnabled sets the "router_probe_enabled" field if the given value is not nil.
+func (_u *AppConfigUpdateOne) SetNillableRouterProbeEnabled(v *bool) *AppConfigUpdateOne {
+	if v != nil {
+		_u.SetRouterProbeEnabled(*v)
+	}
+	return _u
+}
+
 // Mutation returns the AppConfigMutation object of the builder.
 func (_u *AppConfigUpdateOne) Mutation() *AppConfigMutation {
 	return _u.mutation
@@ -516,6 +547,9 @@ func (_u *AppConfigUpdateOne) sqlSave(ctx context.Context) (_node *AppConfig, er
 	}
 	if value, ok := _u.mutation.WifiSampleEnabled(); ok {
 		_spec.SetField(appconfig.FieldWifiSampleEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RouterProbeEnabled(); ok {
+		_spec.SetField(appconfig.FieldRouterProbeEnabled, field.TypeBool, value)
 	}
 	_node = &AppConfig{config: _u.config}
 	_spec.Assign = _node.assignValues

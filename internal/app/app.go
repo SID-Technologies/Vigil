@@ -118,11 +118,27 @@ func Run() int {
 			PingTimeoutMs:     c.PingTimeoutMs,
 			WifiSampleEnabled: c.WifiSampleEnabled,
 		})
+
+		// RouterProbeEnabled affects the probe list, not Monitor.Config —
+		// rebuild from the DB and reapply so the gateway probe disappears
+		// or returns without a restart.
+		fresh, listErr := store.Targets.ListEnabledProbes(ctx)
+		if listErr != nil {
+			log.Error().Err(listErr).Msg("monitor: failed to refresh probes on config change")
+		} else {
+			if c.RouterProbeEnabled {
+				fresh = mon.AddDynamicGatewayProbe(fresh)
+			}
+
+			mon.SetProbes(fresh)
+		}
+
 		log.Info().
 			Float64("ping_interval_sec", c.PingIntervalSec).
 			Int("flush_interval_sec", c.FlushIntervalSec).
 			Int("ping_timeout_ms", c.PingTimeoutMs).
 			Bool("wifi_sample_enabled", c.WifiSampleEnabled).
+			Bool("router_probe_enabled", c.RouterProbeEnabled).
 			Msg("monitor config hot-reloaded")
 	})
 	ipc.RegisterOutageHandlers(srv, store)
@@ -132,7 +148,11 @@ func Run() int {
 	detector := outages.New(client, func(name string, data any) {
 		srv.Emit(name, data)
 	})
-	probeList = mon.AddDynamicGatewayProbe(probeList)
+
+	if cfg.RouterProbeEnabled {
+		probeList = mon.AddDynamicGatewayProbe(probeList)
+	}
+
 	mon.SetProbes(probeList)
 
 	// Wire after detector + srv exist; detector mutates DB, srv relays to UI.

@@ -117,6 +117,20 @@ func (_c *AppConfigCreate) SetNillableWifiSampleEnabled(v *bool) *AppConfigCreat
 	return _c
 }
 
+// SetRouterProbeEnabled sets the "router_probe_enabled" field.
+func (_c *AppConfigCreate) SetRouterProbeEnabled(v bool) *AppConfigCreate {
+	_c.mutation.SetRouterProbeEnabled(v)
+	return _c
+}
+
+// SetNillableRouterProbeEnabled sets the "router_probe_enabled" field if the given value is not nil.
+func (_c *AppConfigCreate) SetNillableRouterProbeEnabled(v *bool) *AppConfigCreate {
+	if v != nil {
+		_c.SetRouterProbeEnabled(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AppConfigCreate) SetID(v int) *AppConfigCreate {
 	_c.mutation.SetID(v)
@@ -186,6 +200,10 @@ func (_c *AppConfigCreate) defaults() {
 		v := appconfig.DefaultWifiSampleEnabled
 		_c.mutation.SetWifiSampleEnabled(v)
 	}
+	if _, ok := _c.mutation.RouterProbeEnabled(); !ok {
+		v := appconfig.DefaultRouterProbeEnabled
+		_c.mutation.SetRouterProbeEnabled(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -210,6 +228,9 @@ func (_c *AppConfigCreate) check() error {
 	}
 	if _, ok := _c.mutation.WifiSampleEnabled(); !ok {
 		return &ValidationError{Name: "wifi_sample_enabled", err: errors.New(`ent: missing required field "AppConfig.wifi_sample_enabled"`)}
+	}
+	if _, ok := _c.mutation.RouterProbeEnabled(); !ok {
+		return &ValidationError{Name: "router_probe_enabled", err: errors.New(`ent: missing required field "AppConfig.router_probe_enabled"`)}
 	}
 	return nil
 }
@@ -270,6 +291,10 @@ func (_c *AppConfigCreate) createSpec() (*AppConfig, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.WifiSampleEnabled(); ok {
 		_spec.SetField(appconfig.FieldWifiSampleEnabled, field.TypeBool, value)
 		_node.WifiSampleEnabled = value
+	}
+	if value, ok := _c.mutation.RouterProbeEnabled(); ok {
+		_spec.SetField(appconfig.FieldRouterProbeEnabled, field.TypeBool, value)
+		_node.RouterProbeEnabled = value
 	}
 	return _node, _spec
 }

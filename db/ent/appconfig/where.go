@@ -87,6 +87,11 @@ func WifiSampleEnabled(v bool) predicate.AppConfig {
 	return predicate.AppConfig(sql.FieldEQ(FieldWifiSampleEnabled, v))
 }
 
+// RouterProbeEnabled applies equality check predicate on the "router_probe_enabled" field. It's identical to RouterProbeEnabledEQ.
+func RouterProbeEnabled(v bool) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldEQ(FieldRouterProbeEnabled, v))
+}
+
 // PingIntervalSecEQ applies the EQ predicate on the "ping_interval_sec" field.
 func PingIntervalSecEQ(v float64) predicate.AppConfig {
 	return predicate.AppConfig(sql.FieldEQ(FieldPingIntervalSec, v))
@@ -335,6 +340,16 @@ func WifiSampleEnabledEQ(v bool) predicate.AppConfig {
 // WifiSampleEnabledNEQ applies the NEQ predicate on the "wifi_sample_enabled" field.
 func WifiSampleEnabledNEQ(v bool) predicate.AppConfig {
 	return predicate.AppConfig(sql.FieldNEQ(FieldWifiSampleEnabled, v))
+}
+
+// RouterProbeEnabledEQ applies the EQ predicate on the "router_probe_enabled" field.
+func RouterProbeEnabledEQ(v bool) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldEQ(FieldRouterProbeEnabled, v))
+}
+
+// RouterProbeEnabledNEQ applies the NEQ predicate on the "router_probe_enabled" field.
+func RouterProbeEnabledNEQ(v bool) predicate.AppConfig {
+	return predicate.AppConfig(sql.FieldNEQ(FieldRouterProbeEnabled, v))
 }
 
 // And groups predicates with the AND operator between them.
