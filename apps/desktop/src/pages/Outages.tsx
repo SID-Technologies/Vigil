@@ -214,9 +214,34 @@ function ServiceOutageRow({
     ? Math.round((end.getTime() - start.getTime()) / 1000)
     : Math.round((Date.now() - group.startMs) / 1000);
 
-  const headline = group.kind === 'network' ? 'Network' : group.service;
   const probeCount = group.probeLabels.length;
+  const serviceCount = group.services.length;
   const totalFailures = group.members.reduce((sum, m) => sum + m.consecutive_failures, 0);
+
+  // Headline rules:
+  //   network outage          → "Network"
+  //   1 service               → service name (e.g. "outlook")
+  //   2–3 services (burst)    → "google_stun + cloudflare_stun"
+  //   4+ services (burst)     → "N services affected"
+  const headline =
+    group.kind === 'network' && serviceCount === 1
+      ? 'Network'
+      : serviceCount === 1
+        ? group.services[0]
+        : serviceCount <= 3
+          ? group.services.join(' + ')
+          : `${serviceCount} services affected`;
+
+  // The chip prioritizes the more interesting axis:
+  //   multi-service          → "N services" (the new burst incident signal)
+  //   single-service multi-probe → "N probes" (existing behavior)
+  //   single-service single-probe → no chip
+  const chipLabel =
+    serviceCount > 1
+      ? `${serviceCount} services`
+      : probeCount > 1 && group.kind !== 'network'
+        ? `${probeCount} probes`
+        : null;
 
   return (
     <YStack
@@ -246,7 +271,7 @@ function ServiceOutageRow({
         <Text fontSize={13} color="$color12" fontWeight={live ? '600' : '500'}>
           {headline}
         </Text>
-        {probeCount > 1 && group.kind !== 'network' ? (
+        {chipLabel ? (
           <XStack
             paddingHorizontal="$1.5"
             paddingVertical="$0.5"
@@ -256,7 +281,7 @@ function ServiceOutageRow({
             borderColor="$borderColor"
           >
             <Text fontSize={10} color="$color11" fontWeight="600">
-              {probeCount} probes
+              {chipLabel}
             </Text>
           </XStack>
         ) : null}

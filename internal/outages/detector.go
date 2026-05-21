@@ -35,11 +35,13 @@ import (
 	"encoding/json"
 	"maps"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/sid-technologies/vigil/db/ent"
+	"github.com/sid-technologies/vigil/db/ent/outage"
 	"github.com/sid-technologies/vigil/internal/monitor"
 	"github.com/sid-technologies/vigil/internal/probes"
 )
@@ -112,6 +114,47 @@ func (d *Detector) OnCycle(ctx context.Context, ev monitor.CycleEvent) {
 	// Network scope: failed iff every probe in the cycle failed.
 	networkFailed := ev.Total > 0 && ev.OK == 0
 	d.advance(ctx, "network", ev.TSUnixMs, !networkFailed, combinedError(ev.Results))
+}
+
+// CloseOpenOutages force-closes every open outage for the given scope and
+// wipes the in-memory state machine for it. Called when the upstream
+// target is disabled (or the router probe toggle is flipped off) so the
+// row doesn't linger as ongoing forever — disabled probes can't produce
+// the successes the normal recovery hold-off requires.
+//
+// Safe to call when nothing is open for the scope: queries return zero
+// rows and the state delete is a no-op.
+func (d *Detector) CloseOpenOutages(ctx context.Context, scope string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	endTSMs := time.Now().UnixMilli()
+
+	rows, err := d.client.Outage.Query().
+		Where(outage.ScopeEQ(scope), outage.EndTsUnixMsIsNil()).
+		All(ctx)
+	if err != nil {
+		log.Error().Err(err).Str("scope", scope).Msg("outages: open-row query failed")
+		return
+	}
+
+	for _, r := range rows {
+		updated, err := d.client.Outage.UpdateOneID(r.ID).
+			SetEndTsUnixMs(endTSMs).
+			Save(ctx)
+		if err != nil {
+			log.Error().Err(err).Str("id", r.ID).Msg("outages: force-close failed")
+			continue
+		}
+
+		log.Info().Str("scope", scope).Str("id", r.ID).Msg("outage force-closed (probe disabled)")
+
+		if d.onEvent != nil {
+			d.onEvent("outage:end", outageRowPayloadOf(updated))
+		}
+	}
+
+	delete(d.scopes, scope)
 }
 
 func (d *Detector) advance(ctx context.Context, scope string, tsMs int64, success bool, errPtr *string) {

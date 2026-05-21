@@ -18,7 +18,16 @@ import {
   useUpdateTarget,
   type Target,
 } from '../hooks/useTargets';
+import { useAppConfig, useUpdateConfig } from '../hooks/useAppConfig';
+import { useGatewayInfo } from '../hooks/useGatewayInfo';
 import type { ProbeKind } from '../lib/ipc';
+
+// Sentinel ID for the synthetic router_icmp row. The dynamic gateway probe
+// isn't a DB target — it's added at sidecar startup from the OS routing
+// table — but it's the probe users most expect to see in this list, so we
+// inject a synthetic row whose enable toggle routes to AppConfig instead
+// of the targets API.
+const ROUTER_SYNTHETIC_ID = '__router_icmp__';
 
 const KIND_OPTIONS: { value: ProbeKind; label: string; needsPort: boolean }[] = [
   { value: 'icmp', label: 'ICMP — ping reachability', needsPort: false },
@@ -39,6 +48,9 @@ const KIND_OPTIONS: { value: ProbeKind; label: string; needsPort: boolean }[] = 
  */
 export function TargetsPage() {
   const targets = useTargets();
+  const cfg = useAppConfig();
+  const updateCfg = useUpdateConfig();
+  const gateway = useGatewayInfo();
   const update = useUpdateTarget();
   const del = useDeleteTarget();
   const accent = useAccent();
@@ -48,15 +60,41 @@ export function TargetsPage() {
   const [singleDelete, setSingleDelete] = useState<Target | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
+  // Inject the synthetic router_icmp row at the top of the builtin section.
+  // Host shows the detected gateway IP so the user can confirm what the
+  // probe is actually targeting; toggle routes through configUpdate.
+  const routerSynthetic: Target | null = useMemo(() => {
+    if (!cfg.data) return null;
+    return {
+      id: ROUTER_SYNTHETIC_ID,
+      label: 'router_icmp',
+      kind: 'icmp',
+      host: gateway.data?.detected && gateway.data.ip ? gateway.data.ip : 'auto-detect',
+      enabled: cfg.data.router_probe_enabled,
+      is_builtin: true,
+    };
+  }, [cfg.data, gateway.data]);
+
   const sorted = useMemo(() => {
     const rows = (targets.data ?? []).slice();
+    if (routerSynthetic) rows.push(routerSynthetic);
     rows.sort((a, b) => {
       if (a.is_builtin !== b.is_builtin) return a.is_builtin ? -1 : 1;
       if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
       return a.label.localeCompare(b.label);
     });
     return rows;
-  }, [targets.data]);
+  }, [targets.data, routerSynthetic]);
+
+  // Single entry point for the per-row enable toggle. The synthetic router
+  // row routes through configUpdate; everything else hits the targets API.
+  const setEnabled = (target: Target, enabled: boolean) => {
+    if (target.id === ROUTER_SYNTHETIC_ID) {
+      updateCfg.mutate({ router_probe_enabled: enabled });
+    } else {
+      update.mutate({ id: target.id, enabled });
+    }
+  };
 
   // Drop selections that no longer correspond to existing targets — happens
   // after bulk delete or external mutations.
@@ -93,12 +131,13 @@ export function TargetsPage() {
 
   const bulkSetEnabled = (enabled: boolean) => {
     for (const t of selectedTargets) {
-      update.mutate({ id: t.id, enabled });
+      setEnabled(t, enabled);
     }
   };
 
   const performBulkDelete = () => {
     for (const t of deletableSelected) {
+      if (t.id === ROUTER_SYNTHETIC_ID) continue;
       del.mutate(t.id);
     }
     setSelected(new Set());
@@ -175,7 +214,7 @@ export function TargetsPage() {
                   target={t}
                   selected={selected.has(t.id)}
                   onToggleSelected={() => toggleOne(t.id)}
-                  onToggleEnabled={(enabled) => update.mutate({ id: t.id, enabled })}
+                  onToggleEnabled={(enabled) => setEnabled(t, enabled)}
                   onDelete={() => setSingleDelete(t)}
                 />
               ))

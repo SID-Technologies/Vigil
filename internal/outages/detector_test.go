@@ -289,6 +289,60 @@ func TestDetector_NetworkScopeNotTriggeredIfOneSucceeds(t *testing.T) {
 	assertOutageCount(ctx, t, client, "network", 0)
 }
 
+func TestDetector_CloseOpenOutages_SetsEndTsAndResetsState(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	client := db.SetupTestEntClientDB(t)
+	d := outages.New(client, nil)
+
+	// Open an outage on router_icmp.
+	for i := 1; i <= 3; i++ {
+		d.OnCycle(ctx, makeCycle(t, int64(i)*1000, []probeOutcome{{label: "router_icmp", success: false, err: "timeout"}}))
+	}
+
+	row := mustGetOnly(ctx, t, client, "target:router_icmp")
+	if row.EndTsUnixMs != nil {
+		t.Fatal("outage should still be open before force-close")
+	}
+
+	// User disables the target — open outage must be force-closed.
+	d.CloseOpenOutages(ctx, "target:router_icmp")
+
+	row = mustGetOnly(ctx, t, client, "target:router_icmp")
+	if row.EndTsUnixMs == nil {
+		t.Fatal("end_ts not set after CloseOpenOutages")
+	}
+
+	// Scope state should have been wiped — a fresh run of 3 failures after
+	// re-enable must open a NEW outage row, not update the closed one.
+	for i := 10; i <= 12; i++ {
+		d.OnCycle(ctx, makeCycle(t, int64(i)*1000, []probeOutcome{{label: "router_icmp", success: false, err: "timeout"}}))
+	}
+
+	rows, err := client.Outage.Query().Where(outage.ScopeEQ("target:router_icmp")).All(ctx)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 outage rows (force-closed + fresh), got %d", len(rows))
+	}
+}
+
+func TestDetector_CloseOpenOutages_NoOpWhenNothingOpen(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	client := db.SetupTestEntClientDB(t)
+	d := outages.New(client, nil)
+
+	// No outage exists for this scope. CloseOpenOutages must not error or
+	// create artifacts.
+	d.CloseOpenOutages(ctx, "target:does_not_exist")
+	assertOutageCount(ctx, t, client, "target:does_not_exist", 0)
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================

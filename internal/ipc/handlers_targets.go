@@ -7,8 +7,16 @@ import (
 	"github.com/sid-technologies/vigil/internal/storage"
 )
 
+// OnTargetDisabled fires after a successful targets.update that flips a
+// target from enabled to disabled. Lets the app layer close any open
+// outage rows for the target's scope — a disabled probe produces no more
+// samples, so the normal recovery hold-off can't fire.
+type OnTargetDisabled func(scope string)
+
 // RegisterTargetHandlers wires targets.list/create/update/delete.
-func RegisterTargetHandlers(s *Server, store *storage.Client) {
+//
+// Pass onDisabled=nil to skip the open-outage closure side-effect.
+func RegisterTargetHandlers(s *Server, store *storage.Client, onDisabled OnTargetDisabled) {
 	s.Register("targets.list", bind(func(ctx context.Context, _ struct{}) ([]storage.Target, *Error) {
 		out, err := store.Targets.List(ctx)
 		if err != nil {
@@ -72,6 +80,13 @@ func RegisterTargetHandlers(s *Server, store *storage.Client) {
 		})
 		if err != nil {
 			return zero, internalErr(err)
+		}
+
+		// Was-enabled → now-disabled transition: force-close any open
+		// outage on this target's scope so it doesn't read "ongoing"
+		// forever in the UI.
+		if p.Enabled != nil && !*p.Enabled && existing.Enabled && onDisabled != nil {
+			onDisabled("target:" + existing.Label)
 		}
 
 		return t, nil
