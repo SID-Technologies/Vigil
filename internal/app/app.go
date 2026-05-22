@@ -107,8 +107,22 @@ func Run() int {
 	})
 
 	srv := ipc.NewServer(os.Stdin, os.Stdout)
+
+	// Tauri 2 event-name validator rejects `.` — only [-/:_] allowed.
+	detector := outages.New(client, func(name string, data any) {
+		srv.Emit(name, data)
+	})
+
+	// Single entry point for closing open outages when a probe stops being
+	// run (target disabled or router probe toggled off). The detector's
+	// normal recovery path needs successes to close — disabled probes can't
+	// produce them — so we close explicitly here.
+	closeOutagesForScope := func(scope string) {
+		detector.CloseOpenOutages(ctx, scope)
+	}
+
 	ipc.RegisterCoreHandlers(srv)
-	ipc.RegisterTargetHandlers(srv, store)
+	ipc.RegisterTargetHandlers(srv, store, closeOutagesForScope)
 	ipc.RegisterSampleHandlers(srv, store)
 	ipc.RegisterWifiHandlers(srv, store)
 	ipc.RegisterConfigHandlers(srv, store, func(c storage.AppConfig) {
@@ -133,6 +147,13 @@ func Run() int {
 			mon.SetProbes(fresh)
 		}
 
+		// Idempotent: closes the open outage on the router scope (if any)
+		// when the user disables the router probe. A no-op if it was
+		// already disabled or if no outage was open.
+		if !c.RouterProbeEnabled {
+			closeOutagesForScope("target:router_icmp")
+		}
+
 		log.Info().
 			Float64("ping_interval_sec", c.PingIntervalSec).
 			Int("flush_interval_sec", c.FlushIntervalSec).
@@ -143,11 +164,6 @@ func Run() int {
 	})
 	ipc.RegisterOutageHandlers(srv, store)
 	ipc.RegisterReportHandlers(srv, store)
-
-	// Tauri 2 event-name validator rejects `.` — only [-/:_] allowed.
-	detector := outages.New(client, func(name string, data any) {
-		srv.Emit(name, data)
-	})
 
 	if cfg.RouterProbeEnabled {
 		probeList = mon.AddDynamicGatewayProbe(probeList)

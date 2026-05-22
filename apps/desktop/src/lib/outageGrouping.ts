@@ -1,17 +1,24 @@
 // Outage grouping for the Outages list view.
 //
-// The detector records one outage per probe scope. When a service has
-// multiple probes (e.g., outlook_icmp + outlook_tcp443) and both fail at
-// once, that's logically one incident — but the DB sees two rows. This
-// module folds them into a single user-visible incident.
+// The detector records one outage per probe scope. Two collapse passes
+// turn that raw stream into incidents users can scan:
 //
-// Grouping criteria:
-//   1. Same service name. Default targets follow `<service>_<kind>` where
-//      kind is `icmp`, `tcp<port>`, or `udp`. Strip the suffix to get the
-//      service. Custom targets without a recognized suffix become their
-//      own single-probe service (full label preserved).
-//   2. Overlapping time windows. Ongoing outages extend to `nowMs` for
-//      the overlap test.
+//   1. Same-service merge — outlook_icmp + outlook_tcp443 → one "outlook"
+//      group (service name parsed by stripping `_icmp`/`_tcp<port>`/`_udp`
+//      suffixes; custom targets without a recognizable suffix become
+//      their own single-probe "service").
+//
+//   2. Burst merge — service groups whose starts are within
+//      BURST_WINDOW_MS AND whose intervals overlap fold into one
+//      multi-service incident. Catches the "google_stun + cloudflare_stun
+//      both fail in the same minute" case: simultaneous cross-provider
+//      failures almost always share a root cause (UDP blocked on the
+//      network, DNS recursion broken, etc.).
+//
+// Critically, burst merge only kicks in when starts are clustered, not
+// just when intervals overlap. A permanent ICMP-blocked router outage
+// (ongoing for hours) does NOT swallow every unrelated outage that opens
+// during its lifetime — those start far later than the cluster anchor.
 //
 // Per-probe rows stay intact in the DB — this is a view-layer collapse,
 // so CSV exports and reports retain full granularity.
@@ -19,6 +26,9 @@
 import type { Outage } from '../hooks/useOutages';
 
 const PROBE_KIND_SUFFIX = /_(icmp|tcp\d*|udp)$/;
+
+/** How tight start times must cluster for a burst merge. 60s = "in the same minute". */
+export const BURST_WINDOW_MS = 60_000;
 
 /**
  * Strip the probe-kind suffix from a scope to get the service name. The
@@ -34,9 +44,15 @@ export function serviceName(scope: string): string {
 export interface OutageGroup {
   /** Stable key for React. */
   key: string;
-  /** Derived service name, e.g. "outlook" or "cloudflare_dns". */
-  service: string;
-  /** Drives icon/styling — network outages render with a distinct accent. */
+  /**
+   * Distinct service names contributing to this incident. Length 1 for a
+   * normal single-service group; length ≥2 for a burst-merged incident.
+   */
+  services: string[];
+  /**
+   * Drives icon/styling — `network` if any member's scope is `network`,
+   * otherwise `service`.
+   */
   kind: 'network' | 'service';
   /** Earliest member start. */
   startMs: number;
@@ -94,7 +110,7 @@ export function groupOutages(all: Outage[], nowMs: number = Date.now()): OutageG
       );
       groups.push({
         key: `${service}-${startMs}`,
-        service,
+        services: [service],
         kind: service === 'network' ? 'network' : 'service',
         startMs,
         endMs,
@@ -124,7 +140,92 @@ export function groupOutages(all: Outage[], nowMs: number = Date.now()): OutageG
     flush();
   }
 
+  // Burst-merge pass: collapse service groups whose starts are clustered
+  // (within BURST_WINDOW_MS) AND whose intervals overlap. Captures
+  // cross-provider correlated failures (the "google_stun + cloudflare_stun
+  // both fail at 14:17" case).
+  const merged = mergeBursts(groups, nowMs);
+
   // Newest first — matches the user's likely scan order in the list.
-  groups.sort((a, b) => b.startMs - a.startMs);
-  return groups;
+  merged.sort((a, b) => b.startMs - a.startMs);
+  return merged;
+}
+
+function mergeBursts(groups: OutageGroup[], nowMs: number): OutageGroup[] {
+  if (groups.length <= 1) return groups;
+
+  const byStart = groups.slice().sort((a, b) => a.startMs - b.startMs);
+  const out: OutageGroup[] = [];
+
+  let cluster: OutageGroup[] = [];
+  let anchorStartMs = -Infinity;
+  let clusterEndMs = -Infinity;
+
+  const flush = () => {
+    if (cluster.length === 0) return;
+    if (cluster.length === 1) {
+      out.push(cluster[0]);
+      cluster = [];
+      return;
+    }
+
+    out.push(mergeClusterMembers(cluster));
+    cluster = [];
+  };
+
+  for (const g of byStart) {
+    const gEndMs = g.endMs ?? nowMs;
+
+    if (cluster.length === 0) {
+      cluster.push(g);
+      anchorStartMs = g.startMs;
+      clusterEndMs = gEndMs;
+      continue;
+    }
+
+    const startCloseEnough = g.startMs - anchorStartMs <= BURST_WINDOW_MS;
+    const intervalsOverlap = g.startMs <= clusterEndMs;
+
+    if (startCloseEnough && intervalsOverlap) {
+      cluster.push(g);
+      if (gEndMs > clusterEndMs) clusterEndMs = gEndMs;
+      continue;
+    }
+
+    flush();
+    cluster.push(g);
+    anchorStartMs = g.startMs;
+    clusterEndMs = gEndMs;
+  }
+
+  flush();
+  return out;
+}
+
+function mergeClusterMembers(cluster: OutageGroup[]): OutageGroup {
+  const services = Array.from(new Set(cluster.flatMap((g) => g.services))).sort();
+  const probeLabels = Array.from(new Set(cluster.flatMap((g) => g.probeLabels))).sort();
+  const members = cluster.flatMap((g) => g.members);
+  const startMs = Math.min(...cluster.map((g) => g.startMs));
+
+  let endMs: number | null = -Infinity;
+  for (const g of cluster) {
+    if (g.endMs == null) {
+      endMs = null;
+      break;
+    }
+    if (g.endMs > (endMs as number)) endMs = g.endMs;
+  }
+
+  const isNetwork = cluster.some((g) => g.kind === 'network');
+
+  return {
+    key: `burst-${services.join('+')}-${startMs}`,
+    services,
+    kind: isNetwork ? 'network' : 'service',
+    startMs,
+    endMs,
+    members,
+    probeLabels,
+  };
 }

@@ -306,10 +306,28 @@ function HistoryChart({
   // legible.
   const xTicks = useMemo(() => generateTimeTicks(fromMs, toMs, 7), [fromMs, toMs]);
 
-  // Log domain must avoid zero. RTTs are typically >=1ms; clamp the floor
-  // so the axis renders cleanly even if a sub-1ms value sneaks through.
-  const yDomain: [number | 'auto', number | 'auto'] =
-    yScale === 'log' ? [1, 'auto'] : [0, 'auto'];
+  // Log scale domain: explicit dataMin/dataMax avoids recharts' `'auto'`
+  // nice-rounding which silently fails for >5-order ranges (e.g. 5ms →
+  // 983603ms produces an empty chart with [1, 'auto']). Floor + ceil to the
+  // bracketing powers of ten so the axis gridlines land on legible values.
+  //
+  // The `as` cast is unavoidable — recharts' AxisDomain is loosely typed,
+  // and the function-form bounds aren't expressible in the union it ships.
+  const yDomain =
+    yScale === 'log'
+      ? ([
+          (dataMin: number) =>
+            Math.max(1, Math.pow(10, Math.floor(Math.log10(Math.max(1, dataMin))))),
+          (dataMax: number) =>
+            Math.pow(10, Math.ceil(Math.log10(Math.max(10, dataMax)))),
+        ] as unknown as [number, number])
+      : ([0, 'auto'] as [number, 'auto']);
+
+  // `monotone` interpolation creates bezier control points that can sweep
+  // way past data extremes; on a log axis with a 5+ order range, those
+  // control points fall outside the visible region and the path renders
+  // as nothing. Linear segments don't have this problem.
+  const lineType = yScale === 'log' ? 'linear' : 'monotone';
 
   return (
     <YStack height={320}>
@@ -342,7 +360,7 @@ function HistoryChart({
           {targetsToChart.map((label) => (
             <Line
               key={label}
-              type="monotone"
+              type={lineType}
               dataKey={label}
               stroke={getColor(label)}
               strokeWidth={1.5}
